@@ -1941,4 +1941,19 @@ function toggleSmQr(){
 }
 
 // ── UTILS ─────────────────────────────────────────────────────────────
-function mkCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return Array.from({length:6},()=>c[Math.floor(Math.random()
+function mkCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return Array.from({length:6},()=>c[Math.floor(Math.random()*c.length)]).join('');}
+function copyBuildUrl(){navigator.clipboard.writeText(document.getElementById('build-url')?.textContent||'').then(()=>toast('Link copied!','ok'));}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));const el=document.getElementById(id);if(el){el.classList.add('active');window.scrollTo(0,0);}}
+function toast(msg,type=''){const c=document.getElementById('toasts');const el=document.createElement('div');el.className='toast '+(type||'');el.textContent=msg;c.appendChild(el);setTimeout(()=>el.remove(),3000);}
+
+// ── INIT ──────────────────────────────────────────────────────────────
+window.addEventListener('load',()=>{
+  const p=new URLSearchParams(location.search);
+  const code=p.get('join');
+  if(code){show('s-join');document.getElementById('j-code').value=code.toUpperCase();document.getElementById('j-name').focus();}
+  updateTimerDisplay();
+});
+</script>
+</body>
+</html>
