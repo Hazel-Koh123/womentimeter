@@ -590,6 +590,8 @@ const PEERS=[
   'https://gun.eco/gun',
   'https://etogun.glitch.me/gun',
   'https://peer.wallie.io/gun',
+  'https://gunjs.herokuapp.com/gun',
+  'https://gun-us.glitch.me/gun',
 ];
 const MOODS_EM=['','😫','😕','😐','🙂','🤩'];
 const MAX_VOTES=3;
@@ -747,9 +749,16 @@ function reorderActivities(){
 
 function tryRouteTeam(){
   if(myRole!=='team'||phase!=='live')return;
-  if(!pendingActOrder||activities.length<pendingActOrder.length)return;
+  if(!pendingActOrder)return;
+  // Find the specific activity that belongs at curActIdx — don't require ALL to be loaded
+  const targetId=pendingActOrder[curActIdx];
+  if(!targetId)return;
+  const act=activities.find(a=>a.id===targetId);
+  if(!act)return;
   reorderActivities();
-  routeTeamToActivity(curActIdx);
+  // After reorder, find correct index (in case partial load shifted things)
+  const idx=activities.findIndex(a=>a.id===targetId);
+  if(idx>=0)routeTeamToActivity(idx);
 }
 
 // ── PHASE ─────────────────────────────────────────────────────────────
@@ -763,7 +772,7 @@ function onPhaseChange(p){
 function onActivityChange(){
   revealed=false;quizAnswerRevealed=false;myVotesLeft=MAX_VOTES;
   if(myRole==='sm'){updateProgList();renderCurrentAct();updateSMControls();}
-  else{tryRouteTeam();if(pendingActOrder&&activities.length>=pendingActOrder.length)routeTeamToActivity(curActIdx);}
+  else tryRouteTeam();
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────
@@ -811,12 +820,18 @@ function doJoin(){
     if(d&&d.phase==='live'){
       phase='live';
       curActIdx=d.curActIdx||0;
-      // Activities may not have loaded yet — routeTeamToActivity will be
-      // called again by activityOrder.on() once the list arrives
-      if(activities.length>0)routeTeamToActivity(curActIdx);
+      tryRouteTeam();
     }
     else if(d&&d.phase==='done'){show('s-results');renderResults();}
   });
+  // Fallback: retry routing every 1s for up to 10s if Gun is slow to deliver activities
+  let retries=0;
+  const retryTimer=setInterval(()=>{
+    retries++;
+    if(phase==='live'&&document.getElementById('s-activity')?.classList.contains('active')){clearInterval(retryTimer);return;}
+    if(phase==='live')tryRouteTeam();
+    if(retries>=10)clearInterval(retryTimer);
+  },1000);
 }
 
 // ── ACTIVITY MODAL ─────────────────────────────────────────────────────
