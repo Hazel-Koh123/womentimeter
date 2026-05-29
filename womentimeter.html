@@ -629,6 +629,9 @@ let timerSecs=300,timerRunning=false,timerInt=null;
 // Activity modal state
 let modalActType='',modalEditIdx=-1;
 
+// Pending activity order from Gun (used to sort team's activities array)
+let pendingActOrder=null;
+
 // ── GUN ───────────────────────────────────────────────────────────────
 function initGun(code){
   myCode=code;
@@ -646,22 +649,22 @@ function initGun(code){
 
   node.get('activityOrder').on(d=>{
     if(!d||!d.order)return;
-    const order=JSON.parse(d.order);
-    // Rebuild activities array maintaining configs stored in Gun
-    // SM already has activities; team reads them
-    if(myRole==='team'&&activities.length===0){
-      // wait for acts to load
-    }
+    try{pendingActOrder=JSON.parse(d.order);}catch(e){return;}
+    reorderActivities();
+    if(myRole==='team'&&phase==='live')routeTeamToActivity(curActIdx);
   });
 
   node.get('acts').map().on((d,k)=>{
     if(!d||!k)return;
     const existing=activities.find(a=>a.id===k);
     if(!existing){
-      const act={id:k,type:d.type,title:d.title,config:typeof d.config==='string'?JSON.parse(d.config):d.config};
-      activities.push(act);
+      let cfg=d.config;
+      try{if(typeof cfg==='string')cfg=JSON.parse(cfg);}catch(e){}
+      activities.push({id:k,type:d.type,title:d.title,config:cfg||{}});
     }
+    reorderActivities();
     if(myRole==='sm'){renderAgenda();renderProgList();}
+    else if(phase==='live')renderCurrentAct();
   });
 
   node.get('participants').map().on((d,k)=>{if(d&&k){st.participants[k]=d;renderParticipants();}});
@@ -671,7 +674,7 @@ function initGun(code){
     const [actId,uid]=k.split('__');
     if(!st.moods[actId])st.moods[actId]={};
     st.moods[actId][uid]=d;
-    if(myRole==='sm')renderCurrentAct();
+    renderCurrentAct();
   });
 
   node.get('cards').map().on((d,k)=>{
@@ -698,7 +701,6 @@ function initGun(code){
     if(!st.pollVotes[actId])st.pollVotes[actId]={};
     st.pollVotes[actId][uid]=d;
     renderCurrentAct();
-    if(myRole==='sm')renderCurrentAct();
   });
 
   node.get('brainCards').map().on((d,k)=>{
@@ -735,6 +737,12 @@ function setSynced(on){
   ['build-sync-lbl','sm-sync-lbl','t-sync-lbl'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.textContent=on?'Live':'Connecting…';
   });
+}
+
+// ── ACTIVITY ORDER ────────────────────────────────────────────────────
+function reorderActivities(){
+  if(!pendingActOrder||!pendingActOrder.length)return;
+  activities.sort((a,b)=>pendingActOrder.indexOf(a.id)-pendingActOrder.indexOf(b.id));
 }
 
 // ── PHASE ─────────────────────────────────────────────────────────────
@@ -790,7 +798,13 @@ function doJoin(){
   node.get('participants').get(myUid).put({name:myName,role:'team',joined:Date.now()});
   // Check if already live
   node.get('meta').once(d=>{
-    if(d&&d.phase==='live'){phase='live';curActIdx=d.curActIdx||0;routeTeamToActivity(curActIdx);}
+    if(d&&d.phase==='live'){
+      phase='live';
+      curActIdx=d.curActIdx||0;
+      // Activities may not have loaded yet — routeTeamToActivity will be
+      // called again by activityOrder.on() once the list arrives
+      if(activities.length>0)routeTeamToActivity(curActIdx);
+    }
     else if(d&&d.phase==='done'){show('s-results');renderResults();}
   });
 }
@@ -1897,13 +1911,24 @@ function updateTimerDisplay(){
 
 // ── SM QR ──────────────────────────────────────────────────────────────
 function initSmQr(){
-  const url=location.href.split('?')[0]+'?join='+myCode;
+  const base=location.href.split('?')[0];
+  const isLocal=location.protocol==='file:';
+  const url=base+'?join='+myCode;
   const urlEl=document.getElementById('sm-qr-url');
-  if(urlEl)urlEl.textContent=url;
   const wrap=document.getElementById('sm-qr-code');
   if(!wrap)return;
   wrap.innerHTML='';
-  try{new QRCode(wrap,{text:url,width:140,height:140,colorDark:'#1B3A6B',colorLight:'#FFFFFF',correctLevel:QRCode.CorrectLevel.M});}catch(e){}
+  if(isLocal){
+    wrap.innerHTML=`<div style="padding:10px;background:rgba(255,100,100,.15);border-radius:8px;font-size:.75rem;color:#ffaaaa;text-align:center;">
+      ⚠️ You're opening this file locally.<br>QR scanning won't work until you access the app via your Vercel URL.<br><br>
+      <b style="font-size:1.1rem;letter-spacing:4px;color:#fff;">${myCode}</b><br>
+      <span style="opacity:.7;">Share this code manually</span>
+    </div>`;
+    if(urlEl)urlEl.textContent='Deploy to Vercel for QR scanning';
+    return;
+  }
+  try{new QRCode(wrap,{text:url,width:180,height:180,colorDark:'#1B3A6B',colorLight:'#FFFFFF',correctLevel:QRCode.CorrectLevel.H});}catch(e){}
+  if(urlEl)urlEl.textContent=url;
 }
 
 function toggleSmQr(){
