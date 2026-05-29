@@ -1,0 +1,1934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>(Wo)mentimeter</title>
+  <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:      #1B3A6B; --navy-mid: #2A5298; --navy-dark: #0F2447;
+  --navy-bg:   #EDF2FB; --navy-20: rgba(27,58,107,.2);
+  --white:     #FFFFFF;
+  --coral:     #FF6B6B; --coral-d: #E85555; --coral-bg: #FFF0F0;
+  --gray:      #64748B; --gray-l: #F1F5F9; --gray-b: #E2E8F0;
+  --text:      #1E293B; --green: #10B981; --amber: #F59E0B;
+  --sh:        0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -1px rgba(0,0,0,.06);
+  --sh-lg:     0 10px 15px -3px rgba(0,0,0,.1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',sans-serif;background:var(--gray-l);color:var(--text);min-height:100vh;}
+
+/* SCREENS */
+.screen{display:none;flex-direction:column;min-height:100vh;}
+.screen.active{display:flex;}
+
+/* NAV */
+.nav{background:var(--navy);color:#fff;padding:13px 22px;display:flex;align-items:center;
+     justify-content:space-between;position:sticky;top:0;z-index:50;flex-shrink:0;gap:12px;}
+.logo{font-weight:800;font-size:1.15rem;letter-spacing:-.5px;white-space:nowrap;}
+.logo span{color:var(--coral);}
+.nav-r{display:flex;align-items:center;gap:10px;font-size:.82rem;flex-shrink:0;}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green);transition:background .3s;flex-shrink:0;}
+.sync-dot.off{background:var(--coral);}
+.badge{background:rgba(255,255,255,.15);padding:3px 9px;border-radius:20px;
+       font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;white-space:nowrap;}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 20px;
+     border-radius:9px;border:none;font-size:.88rem;font-weight:600;cursor:pointer;
+     transition:transform .12s,opacity .12s,background .12s;font-family:inherit;}
+.btn:hover:not(:disabled){transform:translateY(-1px);}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important;}
+.btn-p{background:var(--coral);color:#fff;} .btn-p:hover:not(:disabled){background:var(--coral-d);}
+.btn-n{background:var(--navy);color:#fff;} .btn-n:hover:not(:disabled){background:var(--navy-dark);}
+.btn-o{background:transparent;color:var(--navy);border:2px solid var(--navy);}
+.btn-o:hover:not(:disabled){background:var(--navy-bg);}
+.btn-g{background:transparent;color:var(--gray);padding:7px 11px;}
+.btn-g:hover:not(:disabled){background:var(--gray-l);}
+.btn-danger{background:transparent;color:var(--coral);border:1.5px solid var(--coral);padding:5px 10px;font-size:.78rem;}
+.btn-sm{padding:6px 13px;font-size:.8rem;} .btn-lg{padding:15px 26px;font-size:.98rem;}
+.btn-block{width:100%;}
+
+/* INPUTS */
+.field{display:flex;flex-direction:column;gap:5px;}
+.field label{font-size:.8rem;font-weight:600;color:var(--navy);}
+.inp{width:100%;padding:10px 13px;border:2px solid var(--gray-b);border-radius:8px;
+     font-size:.9rem;font-family:inherit;outline:none;transition:border-color .18s;background:#fff;}
+.inp:focus{border-color:var(--coral);}
+.inp-code{text-transform:uppercase;letter-spacing:6px;font-size:1.25rem;font-weight:700;text-align:center;}
+
+/* CARDS */
+.card{background:#fff;border-radius:14px;padding:20px;box-shadow:var(--sh);}
+.card-sm{background:#fff;border-radius:10px;padding:14px;box-shadow:var(--sh);}
+
+/* LAYOUT */
+.wrap{max-width:1160px;margin:0 auto;padding:22px;flex:1;}
+.wrap-sm{max-width:520px;margin:0 auto;padding:22px;flex:1;display:flex;flex-direction:column;justify-content:center;}
+.wrap-md{max-width:760px;margin:0 auto;padding:22px;flex:1;}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+@media(max-width:900px){.g3{grid-template-columns:1fr;}}
+@media(max-width:680px){.g2{grid-template-columns:1fr;}}
+
+/* ── HOME ── */
+#s-home{align-items:center;justify-content:center;padding:22px;
+         background:linear-gradient(135deg,var(--navy-dark),var(--navy) 55%,var(--navy-mid));}
+.home-box{background:#fff;border-radius:20px;padding:40px 36px;max-width:420px;width:100%;
+          text-align:center;box-shadow:0 22px 44px rgba(0,0,0,.24);}
+.home-icon{font-size:3rem;margin-bottom:10px;}
+.home-title{font-size:2.2rem;font-weight:800;color:var(--navy);letter-spacing:-1px;}
+.home-title span{color:var(--coral);}
+.home-sub{color:var(--gray);margin:7px 0 28px;font-size:.9rem;}
+.home-stack{display:flex;flex-direction:column;gap:10px;}
+.home-hint{margin-top:20px;font-size:.7rem;color:var(--gray);}
+
+/* ── GAME BUILDER ── */
+.builder-layout{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start;}
+@media(max-width:800px){.builder-layout{grid-template-columns:1fr;}}
+.activity-palette{display:flex;flex-direction:column;gap:8px;}
+.palette-item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;
+              border:2px solid var(--gray-b);background:#fff;cursor:pointer;
+              transition:all .15s;font-size:.88rem;font-weight:600;}
+.palette-item:hover{border-color:var(--coral);background:var(--coral-bg);color:var(--coral);}
+.palette-icon{font-size:1.3rem;width:28px;text-align:center;}
+.agenda-list{display:flex;flex-direction:column;gap:10px;min-height:80px;}
+.agenda-item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;
+             background:#fff;box-shadow:var(--sh);border-left:4px solid var(--coral);}
+.agenda-num{width:22px;height:22px;border-radius:50%;background:var(--coral);color:#fff;
+            font-size:.7rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.agenda-info{flex:1;min-width:0;}
+.agenda-title{font-weight:700;font-size:.88rem;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.agenda-type{font-size:.72rem;color:var(--gray);margin-top:1px;}
+.agenda-actions{display:flex;gap:5px;flex-shrink:0;}
+.agenda-ord{width:26px;height:26px;border-radius:6px;border:1.5px solid var(--gray-b);
+            background:#fff;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;}
+.agenda-ord:hover{background:var(--navy-bg);border-color:var(--navy);}
+.empty-agenda{border:2px dashed var(--gray-b);border-radius:10px;padding:28px;
+              text-align:center;color:var(--gray);font-size:.85rem;}
+
+/* ── ACTIVITY CONFIG MODAL ── */
+.backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.48);z-index:100;
+          align-items:center;justify-content:center;padding:20px;}
+.backdrop.open{display:flex;}
+.modal{background:#fff;border-radius:18px;padding:28px;max-width:480px;width:100%;
+       box-shadow:0 22px 44px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto;}
+.modal h2{font-size:1.1rem;font-weight:700;color:var(--navy);margin-bottom:16px;}
+
+/* ── SM LIVE DASHBOARD ── */
+.sm-layout{display:grid;grid-template-columns:280px 1fr;gap:18px;align-items:start;}
+@media(max-width:900px){.sm-layout{grid-template-columns:1fr;}}
+.activity-progress{display:flex;flex-direction:column;gap:6px;}
+.prog-item{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:9px;
+           background:rgba(255,255,255,.07);cursor:pointer;transition:background .15s;font-size:.85rem;font-weight:600;}
+.prog-item:hover{background:rgba(255,255,255,.14);}
+.prog-item.current{background:var(--coral);}
+.prog-item.done{opacity:.45;}
+.prog-item.done .prog-num{background:rgba(255,255,255,.3);}
+.prog-num{width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.15);
+          font-size:.65rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.prog-num.cur{background:rgba(255,255,255,.9);color:var(--coral);}
+.sm-panel{background:var(--navy);border-radius:14px;padding:18px;color:#fff;position:sticky;top:80px;}
+.sm-panel-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:.55;margin-bottom:12px;}
+.nav-btns{display:flex;gap:8px;margin-top:14px;}
+.nav-btns .btn{flex:1;padding:9px 6px;font-size:.82rem;}
+
+/* ── PROGRESS BAR ── */
+.prog-bar-wrap{background:rgba(255,255,255,.12);border-radius:6px;height:5px;margin-bottom:14px;overflow:hidden;}
+.prog-bar-fill{height:100%;background:var(--coral);border-radius:6px;transition:width .4s ease;}
+
+/* ── TIMER ── */
+.timer-num{font-size:2rem;font-weight:800;text-align:center;color:var(--navy);font-variant-numeric:tabular-nums;}
+.timer-num.warn{color:var(--coral);}
+.timer-row{display:flex;gap:6px;justify-content:center;margin-top:9px;flex-wrap:wrap;}
+
+/* ── PARTICIPANTS ── */
+.chip-row{display:flex;flex-wrap:wrap;gap:6px;min-height:30px;}
+.chip{display:flex;align-items:center;gap:5px;background:var(--navy-bg);color:var(--navy);
+      padding:4px 11px;border-radius:20px;font-size:.8rem;font-weight:500;}
+.chip-dot{width:6px;height:6px;border-radius:50%;background:var(--green);}
+
+/* ── RETRO BOARD ── */
+.col-head{padding:13px 16px;font-weight:700;font-size:.85rem;display:flex;align-items:center;
+          gap:8px;border-radius:10px 10px 0 0;}
+.col-head.ww{background:var(--navy);color:#fff;}
+.col-head.nw{background:var(--coral);color:#fff;}
+.col-head.ai{background:var(--navy-mid);color:#fff;}
+.col-head.custom{background:var(--amber);color:#fff;}
+.col-body{background:#fff;padding:13px;min-height:200px;display:flex;flex-direction:column;gap:8px;
+          border-radius:0 0 10px 10px;border:1px solid var(--gray-b);border-top:none;}
+.r-card{background:var(--gray-l);border-radius:8px;padding:11px;font-size:.86rem;line-height:1.5;
+        border-left:3px solid transparent;position:relative;}
+.r-card.ww{border-left-color:var(--navy);} .r-card.nw{border-left-color:var(--coral);}
+.r-card.ai{border-left-color:var(--navy-mid);} .r-card.custom{border-left-color:var(--amber);}
+.r-card.masked{background:var(--navy-bg);color:transparent;user-select:none;}
+.r-card.masked::after{content:'● ● ● ● ●';position:absolute;inset:0;padding:11px;display:flex;
+                       align-items:center;color:var(--gray);font-size:.6rem;letter-spacing:4px;}
+.card-foot{display:flex;align-items:center;justify-content:flex-end;margin-top:8px;}
+.vote-btn{display:flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;border:2px solid var(--gray-b);
+          background:#fff;font-size:.76rem;font-weight:600;cursor:pointer;transition:all .13s;font-family:inherit;}
+.vote-btn:hover{border-color:var(--coral);color:var(--coral);}
+.vote-btn.on{background:var(--coral);border-color:var(--coral);color:#fff;}
+.add-btn{width:100%;padding:8px;border:2px dashed var(--gray-b);border-radius:8px;background:transparent;
+         color:var(--gray);font-size:.8rem;cursor:pointer;transition:all .13s;font-family:inherit;}
+.add-btn:hover{border-color:var(--coral);color:var(--coral);background:var(--coral-bg);}
+.add-area{display:none;flex-direction:column;gap:6px;}
+.add-area.open{display:flex;}
+.add-ta{width:100%;padding:8px 10px;border:2px solid var(--coral);border-radius:8px;
+        font-family:inherit;font-size:.86rem;resize:none;outline:none;}
+.add-row{display:flex;justify-content:flex-end;gap:6px;}
+
+/* ── MOOD ── */
+.mood-row{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin:24px 0 6px;}
+.mood-btn{width:68px;height:68px;border-radius:16px;border:3px solid var(--gray-b);background:#fff;
+          font-size:2rem;cursor:pointer;transition:all .13s;display:flex;align-items:center;justify-content:center;}
+.mood-btn:hover{border-color:var(--coral);transform:scale(1.1);}
+.mood-btn.on{border-color:var(--coral);background:var(--coral-bg);transform:scale(1.1);}
+.mood-range{display:flex;justify-content:space-between;font-size:.7rem;color:var(--gray);padding:0 3px;}
+.mood-bars{display:flex;gap:10px;justify-content:center;align-items:flex-end;height:110px;margin:14px 0;}
+.mbar-w{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.mbar-t{width:40px;height:84px;background:var(--gray-l);border-radius:6px;overflow:hidden;display:flex;align-items:flex-end;}
+.mbar-f{width:100%;background:var(--coral);border-radius:6px;transition:height .5s ease;}
+
+/* ── POLL / QUIZ ── */
+.poll-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:18px 0;}
+.poll-opt{padding:16px;border:3px solid var(--gray-b);border-radius:11px;background:#fff;
+          font-size:.9rem;font-weight:500;cursor:pointer;transition:all .13s;text-align:center;font-family:inherit;}
+.poll-opt:hover{border-color:var(--navy);background:var(--navy-bg);}
+.poll-opt.picked{border-color:var(--coral);background:var(--coral-bg);}
+.poll-opt.correct{border-color:var(--green)!important;background:#f0fdf4!important;}
+.poll-opt.wrong{border-color:var(--coral)!important;background:var(--coral-bg)!important;opacity:.7;}
+.pbar-row{display:flex;align-items:center;gap:9px;margin:6px 0;}
+.pbar-label{min-width:100px;font-size:.82rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pbar-track{flex:1;height:10px;background:var(--gray-l);border-radius:5px;overflow:hidden;}
+.pbar-fill{height:100%;background:var(--coral);border-radius:5px;transition:width .5s;}
+.pbar-fill.correct-fill{background:var(--green);}
+.pbar-cnt{min-width:34px;text-align:right;font-size:.76rem;color:var(--gray);}
+.quiz-reveal-btn{margin-top:14px;}
+
+/* ── BRAINSTORM ── */
+.bs-list{display:flex;flex-direction:column;gap:7px;}
+.bs-card{background:var(--gray-l);border-radius:8px;padding:10px 13px;font-size:.86rem;
+         line-height:1.5;border-left:3px solid var(--amber);}
+
+/* ── BANNER ── */
+.banner{background:var(--navy);color:#fff;padding:10px 22px;text-align:center;font-size:.83rem;flex-shrink:0;}
+.banner b{color:var(--coral);}
+
+/* ── WAITING DOTS ── */
+.dots{display:flex;gap:7px;justify-content:center;padding:24px;}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--coral);animation:dp 1.3s ease-in-out infinite;}
+.dot:nth-child(2){animation-delay:.2s;} .dot:nth-child(3){animation-delay:.4s;}
+@keyframes dp{0%,80%,100%{transform:scale(0);opacity:.4;}40%{transform:scale(1);opacity:1;}}
+
+/* ── TOAST ── */
+#toasts{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:6px;z-index:200;pointer-events:none;}
+.toast{background:var(--navy);color:#fff;padding:10px 16px;border-radius:8px;font-size:.82rem;
+       font-weight:500;box-shadow:var(--sh-lg);animation:tin .25s ease;pointer-events:auto;}
+.toast.ok{background:var(--green);} .toast.err{background:var(--coral);}
+@keyframes tin{from{transform:translateX(110%);opacity:0;}to{transform:none;opacity:1;}}
+
+/* ── TOGGLE ── */
+.tog-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,255,255,.08);border-radius:8px;margin-top:10px;}
+.sw{position:relative;width:42px;height:22px;flex-shrink:0;}
+.sw input{opacity:0;width:0;height:0;position:absolute;}
+.sw-sl{position:absolute;inset:0;background:rgba(255,255,255,.25);border-radius:22px;cursor:pointer;transition:background .2s;}
+.sw-sl::before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s;}
+.sw input:checked~.sw-sl{background:var(--coral);}
+.sw input:checked~.sw-sl::before{transform:translateX(20px);}
+
+/* ── STATS ── */
+.stat-row{display:flex;flex-wrap:wrap;gap:8px;}
+.stat-chip{background:var(--navy-bg);color:var(--navy);padding:5px 12px;border-radius:20px;font-size:.8rem;font-weight:600;}
+.stat-chip b{color:var(--coral);}
+
+/* ── RESULTS ── */
+.results-col{border-radius:10px;overflow:hidden;}
+.results-activity{margin-bottom:20px;}
+.activity-result-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.activity-result-num{width:24px;height:24px;border-radius:50%;background:var(--navy);color:#fff;
+                     font-size:.7rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+
+/* ── QR / CODE ── */
+.code-box{font-size:2.2rem;font-weight:800;letter-spacing:8px;color:var(--navy);text-align:center;
+          padding:16px;background:var(--navy-bg);border-radius:9px;margin:10px 0;}
+.url-row{display:flex;align-items:center;gap:7px;background:var(--gray-l);padding:8px 11px;
+         border-radius:7px;font-size:.72rem;color:var(--gray);word-break:break-all;}
+.url-row span{flex:1;}
+#qr-wrap{display:flex;justify-content:center;padding:10px 0;}
+
+/* ── MISC ── */
+.page-title{font-size:1.35rem;font-weight:800;color:var(--navy);letter-spacing:-.4px;}
+.sub{color:var(--gray);font-size:.85rem;margin-top:3px;}
+.section-head{font-size:.75rem;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.8px;margin-bottom:9px;}
+hr.div{border:none;border-top:1px solid var(--gray-b);margin:14px 0;}
+hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 0;}
+.empty{text-align:center;padding:24px 10px;color:var(--gray);font-size:.82rem;}
+.empty-icon{font-size:1.8rem;margin-bottom:6px;}
+::-webkit-scrollbar{width:5px;} ::-webkit-scrollbar-thumb{background:var(--gray-b);border-radius:3px;}
+
+/* ── ACTIVITY TYPE COLOURS ── */
+.type-mood{color:#7C3AED;} .type-board{color:var(--navy);} .type-poll{color:var(--coral);}
+.type-quiz{color:var(--green);} .type-brain{color:var(--amber);}
+
+/* join screen code display */
+.join-code-display{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
+.join-code-display .code-char{width:42px;height:52px;border:2px solid var(--gray-b);border-radius:9px;
+  background:#fff;display:flex;align-items:center;justify-content:center;
+  font-size:1.4rem;font-weight:800;color:var(--navy);}
+</style>
+</head>
+<body>
+
+<div id="toasts"></div>
+
+<!-- ═══ MODALS ═══════════════════════════════════════════════════════ -->
+
+<!-- Save Draft Modal -->
+<div class="backdrop" id="saveDraftModal">
+  <div class="modal">
+    <h2>💾 Save Draft</h2>
+    <div style="display:flex;flex-direction:column;gap:13px;">
+      <div class="field">
+        <label>Draft Name</label>
+        <input class="inp" id="draft-name-inp" placeholder="e.g. Sprint 29">
+      </div>
+      <p style="font-size:.78rem;color:var(--gray);">Drafts are saved in your browser and available next time you open this file.</p>
+      <div style="display:flex;gap:9px;justify-content:flex-end;">
+        <button class="btn btn-g btn-sm" onclick="closeModal('saveDraftModal')">Cancel</button>
+        <button class="btn btn-p btn-sm" onclick="confirmSaveDraft()">💾 Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Load Draft Modal -->
+<div class="backdrop" id="loadDraftModal">
+  <div class="modal">
+    <h2>📂 Load a Draft</h2>
+    <div id="draft-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:320px;overflow-y:auto;"></div>
+    <div style="display:flex;justify-content:flex-end;">
+      <button class="btn btn-g btn-sm" onclick="closeModal('loadDraftModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Activity Config Modal -->
+<div class="backdrop" id="actModal">
+  <div class="modal">
+    <h2 id="actModal-title">Configure Activity</h2>
+    <div id="actModal-body" style="display:flex;flex-direction:column;gap:13px;">
+      <!-- Injected by JS -->
+    </div>
+    <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn btn-g btn-sm" onclick="closeActModal()">Cancel</button>
+      <button class="btn btn-p btn-sm" onclick="saveActModal()">Save Activity</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ HOME ═══════════════════════════════════════════════════════════ -->
+<div class="screen active" id="s-home">
+  <div class="home-box">
+    <div class="home-icon">👸</div>
+    <div class="home-title">(Wo)<span>mentimeter</span></div>
+    <p class="home-sub">Shhh...don't tell mentimeter</p>
+    <div class="home-stack">
+      <button class="btn btn-n btn-lg" onclick="goCreate()">🎮 Create Game</button>
+      <button class="btn btn-o btn-lg" onclick="goJoin()">🤓 Join Game</button>
+    </div>
+    <p class="home-hint">Real-time sync · No account needed · Works in any browser</p>
+  </div>
+</div>
+
+<!-- ═══ GAME BUILDER (SM) ════════════════════════════════════════════ -->
+<div class="screen" id="s-build">
+  <nav class="nav">
+    <div class="logo">(Wo)<span>mentimeter</span> <span style="font-size:.75rem;opacity:.6;font-weight:400;margin-left:6px;">Game Builder</span></div>
+    <div class="nav-r">
+      <div class="sync-dot off" id="build-sync"></div>
+      <span id="build-sync-lbl" style="font-size:.78rem;">Connecting…</span>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <!-- Header row -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:20px;">
+      <div>
+        <h1 class="page-title">Build Your Game</h1>
+        <p class="sub">Add activities in order — the team plays through them live</p>
+      </div>
+      <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;">
+        <div class="card-sm" style="padding:10px 16px;display:flex;align-items:center;gap:10px;">
+          <div>
+            <div style="font-size:.68rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.8px;">Session Code</div>
+            <div style="font-size:1.3rem;font-weight:800;letter-spacing:5px;color:var(--navy);" id="build-code">——————</div>
+          </div>
+          <div id="qr-small" style="flex-shrink:0;"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-o btn-sm" onclick="openLoadDraftModal()">📂 Load Draft</button>
+          <button class="btn btn-o btn-sm" onclick="openSaveDraftModal()" id="save-draft-btn" disabled>💾 Save Draft</button>
+          <button class="btn btn-p btn-lg" id="launch-btn" onclick="launchSession()" disabled>👑 Launch Session</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="builder-layout">
+      <!-- Palette -->
+      <div>
+        <p class="section-head">Add an Activity</p>
+        <div class="activity-palette">
+          <div class="palette-item" onclick="openActModal('mood')"><span class="palette-icon">😊</span><div><div style="font-weight:700;">Mood Check-in</div><div style="font-size:.73rem;color:var(--gray);font-weight:400;">Team rates their energy</div></div></div>
+          <div class="palette-item" onclick="openActModal('board')"><span class="palette-icon">🗂️</span><div><div style="font-weight:700;">Board</div><div style="font-size:.73rem;color:var(--gray);font-weight:400;">3-column card collection</div></div></div>
+          <div class="palette-item" onclick="openActModal('poll')"><span class="palette-icon">📊</span><div><div style="font-weight:700;">Poll</div><div style="font-size:.73rem;color:var(--gray);font-weight:400;">Multiple choice vote</div></div></div>
+          <div class="palette-item" onclick="openActModal('quiz')"><span class="palette-icon">🧠</span><div><div style="font-weight:700;">Quiz</div><div style="font-size:.73rem;color:var(--gray);font-weight:400;">Q&A with revealed answer</div></div></div>
+          <div class="palette-item" onclick="openActModal('brain')"><span class="palette-icon">⚡</span><div><div style="font-weight:700;">Brainstorm</div><div style="font-size:.73rem;color:var(--gray);font-weight:400;">Open-ended idea collection</div></div></div>
+          <div class="palette-item" onclick="openActModal('openq')"><span class="palette-icon">💬</span><div><div style="font-weight:700;">Open Question</div><div style="font-size:.73rem;color:var(--gray);font-weight:400;">One free-text answer per person</div></div></div>
+          <div class="palette-item" onclick="openActModal('slide')"><span class="palette-icon">📋</span><div><div style="font-weight:700;">Info Slide</div><div style="font-size:.73rem;color:var(--gray);font-weight:400;">Present information to the team</div></div></div>
+        </div>
+
+        <hr class="div" style="margin:16px 0;">
+        <p class="section-head">Share with Team</p>
+        <div id="qr-wrap-build" style="display:flex;justify-content:center;padding:8px 0;"></div>
+        <div class="url-row" style="margin-top:4px;">
+          <span id="build-url"></span>
+          <button class="btn btn-g btn-sm" onclick="copyBuildUrl()">📋</button>
+        </div>
+      </div>
+
+      <!-- Agenda -->
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <p class="section-head" style="margin:0;">Game Agenda <span id="agenda-count" style="color:var(--coral);"></span></p>
+          <button class="btn btn-danger btn-sm" onclick="clearAgenda()" id="clear-btn" style="display:none;">Clear All</button>
+        </div>
+        <div class="agenda-list" id="agenda-list">
+          <div class="empty-agenda">
+            <div style="font-size:1.8rem;margin-bottom:8px;">🎯</div>
+            <p>Click an activity type on the left to add it to your game</p>
+          </div>
+        </div>
+        <div id="agenda-hint" style="margin-top:12px;padding:12px;background:var(--navy-bg);border-radius:9px;font-size:.78rem;color:var(--navy);display:none;">
+          ✅ Team members who join now will wait in the lobby. Hit <strong>Launch Session</strong> to begin.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SM LIVE DASHBOARD ════════════════════════════════════════════ -->
+<div class="screen" id="s-sm">
+  <nav class="nav">
+    <div class="logo">(Wo)<span>mentimeter</span></div>
+    <div class="nav-r">
+      <div class="sync-dot off" id="sm-sync"></div>
+      <span id="sm-sync-lbl" style="font-size:.78rem;">Connecting…</span>
+      <div class="badge" id="sm-badge">Live</div>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <div class="sm-layout">
+
+      <!-- LEFT: sidebar -->
+      <div>
+        <div class="sm-panel">
+          <p class="sm-panel-title">Game Progress</p>
+          <div class="prog-bar-wrap"><div class="prog-bar-fill" id="prog-bar" style="width:0%"></div></div>
+          <div class="activity-progress" id="prog-list"></div>
+
+          <hr class="div-light">
+          <div class="nav-btns">
+            <button class="btn btn-g btn-sm" id="prev-btn" onclick="prevActivity()" style="color:#fff;border:1.5px solid rgba(255,255,255,.25);">← Prev</button>
+            <button class="btn btn-p btn-sm" id="next-btn" onclick="nextActivity()">Next →</button>
+          </div>
+
+          <hr class="div-light">
+          <!-- Timer -->
+          <div class="timer-num" id="timer-num">5:00</div>
+          <div class="timer-row">
+            <button class="btn btn-g btn-sm" style="color:#fff;border:1px solid rgba(255,255,255,.2);" onclick="resetTimer(3)">3m</button>
+            <button class="btn btn-g btn-sm" style="color:#fff;border:1px solid rgba(255,255,255,.2);" onclick="resetTimer(5)">5m</button>
+            <button class="btn btn-g btn-sm" style="color:#fff;border:1px solid rgba(255,255,255,.2);" onclick="resetTimer(10)">10m</button>
+            <button class="btn btn-p btn-sm" id="timer-btn" onclick="toggleTimer()">▶ Start</button>
+          </div>
+
+          <hr class="div-light">
+          <!-- Reveal toggle (board activities) -->
+          <div class="tog-row" id="reveal-row" style="display:none;">
+            <label class="sw"><input type="checkbox" id="reveal-chk" onchange="toggleReveal(this.checked)"><span class="sw-sl"></span></label>
+            <div><div style="font-size:.82rem;font-weight:600;">Reveal Cards</div><div style="font-size:.7rem;opacity:.6;">Show all team cards</div></div>
+          </div>
+
+          <!-- Quiz answer reveal -->
+          <div id="quiz-reveal-section" style="display:none;margin-top:10px;">
+            <button class="btn btn-p btn-sm btn-block" onclick="revealAnswer()">🎯 Reveal Answer</button>
+          </div>
+
+          <hr class="div-light">
+          <!-- Join QR -->
+          <div>
+            <button class="btn btn-g btn-sm btn-block" style="color:#fff;border:1px solid rgba(255,255,255,.2);margin-bottom:6px;" onclick="toggleSmQr()">📱 Show Join QR</button>
+            <div id="sm-qr-panel" style="display:none;text-align:center;">
+              <div id="sm-qr-code" style="display:inline-block;background:#fff;padding:8px;border-radius:8px;margin-bottom:6px;"></div>
+              <div style="font-size:.75rem;color:rgba(255,255,255,.7);word-break:break-all;" id="sm-qr-url"></div>
+            </div>
+          </div>
+
+          <hr class="div-light">
+          <!-- Participants -->
+          <p class="sm-panel-title" style="margin-bottom:8px;">👥 Participants (<span id="sm-p-cnt">0</span>)</p>
+          <div class="chip-row" id="sm-p-list"><span style="opacity:.5;font-size:.8rem;">Waiting…</span></div>
+
+          <hr class="div-light">
+          <button class="btn btn-g btn-sm btn-block" style="color:#fff;border:1px solid rgba(255,255,255,.2);" onclick="showResults()">🏁 End &amp; Show Results</button>
+        </div>
+      </div>
+
+      <!-- RIGHT: current activity view -->
+      <div>
+        <div id="sm-activity-view">
+          <div class="empty" style="padding:48px;"><div class="empty-icon">🎮</div><p>Session is loading…</p></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══ JOIN ═════════════════════════════════════════════════════════ -->
+<div class="screen" id="s-join">
+  <nav class="nav">
+    <div class="logo">(Wo)<span>mentimeter</span></div>
+    <button class="btn btn-g" style="color:#fff;font-size:.82rem;" onclick="show('s-home')">← Back</button>
+  </nav>
+  <div class="wrap-sm">
+    <div class="card">
+      <h2 style="font-size:1.3rem;font-weight:800;color:var(--navy);margin-bottom:5px;">Join a Session</h2>
+      <p style="color:var(--gray);font-size:.85rem;margin-bottom:20px;">Enter the 6-character code from your Scrum Master</p>
+      <div style="display:flex;flex-direction:column;gap:13px;">
+        <div class="field"><label>Your Name</label><input class="inp" id="j-name" placeholder="e.g. Alex Chen"></div>
+        <div class="field">
+          <label>Session Code</label>
+          <input class="inp inp-code" id="j-code" placeholder="ABCXYZ" maxlength="6" oninput="this.value=this.value.toUpperCase()">
+        </div>
+        <button class="btn btn-p btn-lg btn-block" style="margin-top:4px;" onclick="doJoin()">Join →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TEAM LOBBY ════════════════════════════════════════════════════ -->
+<div class="screen" id="s-lobby">
+  <nav class="nav">
+    <div class="logo">(Wo)<span>mentimeter</span></div>
+    <div class="nav-r"><div class="sync-dot off" id="t-sync"></div><span id="t-sync-lbl" style="font-size:.78rem;">Connecting…</span></div>
+  </nav>
+  <div class="wrap-sm">
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2.8rem;margin-bottom:10px;">🎉</div>
+      <h2 style="font-size:1.3rem;font-weight:800;color:var(--navy);margin-bottom:5px;">You're in!</h2>
+      <p style="color:var(--gray);font-size:.88rem;">Waiting for the Scrum Master to launch the session</p>
+      <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="chip-row" style="justify-content:center;margin-top:6px;" id="t-p-list"></div>
+      <div style="margin-top:20px;padding:12px;background:var(--navy-bg);border-radius:9px;">
+        <div style="font-size:.68rem;font-weight:700;color:var(--navy);margin-bottom:3px;">SESSION CODE</div>
+        <div style="font-size:1.4rem;font-weight:800;letter-spacing:7px;color:var(--navy);" id="t-code"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TEAM ACTIVITY ════════════════════════════════════════════════ -->
+<div class="screen" id="s-activity">
+  <nav class="nav">
+    <div class="logo">(Wo)<span>mentimeter</span></div>
+    <div class="nav-r">
+      <div class="sync-dot" id="act-sync"></div>
+      <div class="badge" id="act-badge">Activity</div>
+    </div>
+  </nav>
+  <div class="banner" id="act-banner"><b>Activity</b></div>
+  <div id="act-body" style="flex:1;display:flex;flex-direction:column;">
+    <!-- Dynamic -->
+  </div>
+</div>
+
+<!-- ═══ RESULTS ═══════════════════════════════════════════════════════ -->
+<div class="screen" id="s-results">
+  <nav class="nav">
+    <div class="logo">(Wo)<span>mentimeter</span></div>
+    <div class="nav-r"><div class="badge">Results</div></div>
+  </nav>
+  <div class="wrap">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
+      <div>
+        <h1 class="page-title">Game Summary 🏁</h1>
+        <p class="sub" id="res-sub"></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-o btn-sm" onclick="exportMd()">📥 Markdown</button>
+        <button class="btn btn-p btn-sm" onclick="exportXlsx()">📊 Export Excel</button>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <p class="section-head">Overview</p>
+      <div class="stat-row" id="res-stats"></div>
+    </div>
+    <div id="res-body"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ JAVASCRIPT ════════════════════════════════ -->
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────
+const PEERS=[
+  'https://gun.eco/gun',
+  'https://etogun.glitch.me/gun',
+  'https://peer.wallie.io/gun',
+];
+const MOODS_EM=['','😫','😕','😐','🙂','🤩'];
+const MAX_VOTES=3;
+
+// ── UID ───────────────────────────────────────────────────────────────
+const myUid=(()=>{const k='rs_uid4';return localStorage.getItem(k)||(()=>{const v='U'+Math.random().toString(36).slice(2,10).toUpperCase();localStorage.setItem(k,v);return v;})();})();
+
+// ── STATE ─────────────────────────────────────────────────────────────
+let gun,node;
+let myName='',myRole='',myCode='';
+let phase='build'; // build | live | done
+let revealed=false;
+let quizAnswerRevealed=false;
+
+// Activities list (ordered)
+let activities=[];   // [{id,type,title,config:{...}}]
+let curActIdx=-1;    // index of currently active activity
+
+// Responses keyed by activityId
+const st={
+  participants:{},
+  moods:{},        // actId → {uid:{value,name}}
+  cards:{},        // actId → {cardKey:{...}}
+  votes:{},        // actId → {'cardKey__uid':true}
+  pollVotes:{},    // actId → {uid:optKey or JSON array}
+  pollOtherText:{},// actId → {uid:freeText}
+  brainCards:{},   // actId → {cardKey:{...}}
+  openAnswers:{},  // actId → {uid:{text,name}}
+};
+
+let myVotesLeft=MAX_VOTES;
+let mySubmitted={}; // actId → true (submitted this activity)
+
+// Timer
+let timerSecs=300,timerRunning=false,timerInt=null;
+
+// Activity modal state
+let modalActType='',modalEditIdx=-1;
+
+// ── GUN ───────────────────────────────────────────────────────────────
+function initGun(code){
+  myCode=code;
+  gun=Gun({peers:PEERS});
+  node=gun.get('womentimeter_v5').get('s_'+code);
+  setTimeout(()=>setSynced(true),2500);
+
+  node.get('meta').on(d=>{
+    if(!d)return;
+    if(d.phase&&d.phase!==phase){phase=d.phase;onPhaseChange(phase);}
+    if(typeof d.revealed==='boolean'&&d.revealed!==revealed){revealed=d.revealed;renderCurrentAct();}
+    if(typeof d.quizRevealed==='boolean'&&d.quizRevealed!==quizAnswerRevealed){quizAnswerRevealed=d.quizRevealed;renderCurrentAct();}
+    if(typeof d.curActIdx==='number'&&d.curActIdx!==curActIdx){curActIdx=d.curActIdx;onActivityChange();}
+  });
+
+  node.get('activityOrder').on(d=>{
+    if(!d||!d.order)return;
+    const order=JSON.parse(d.order);
+    // Rebuild activities array maintaining configs stored in Gun
+    // SM already has activities; team reads them
+    if(myRole==='team'&&activities.length===0){
+      // wait for acts to load
+    }
+  });
+
+  node.get('acts').map().on((d,k)=>{
+    if(!d||!k)return;
+    const existing=activities.find(a=>a.id===k);
+    if(!existing){
+      const act={id:k,type:d.type,title:d.title,config:typeof d.config==='string'?JSON.parse(d.config):d.config};
+      activities.push(act);
+    }
+    if(myRole==='sm'){renderAgenda();renderProgList();}
+  });
+
+  node.get('participants').map().on((d,k)=>{if(d&&k){st.participants[k]=d;renderParticipants();}});
+
+  node.get('moods').map().on((d,k)=>{
+    if(!d||!k)return;
+    const [actId,uid]=k.split('__');
+    if(!st.moods[actId])st.moods[actId]={};
+    st.moods[actId][uid]=d;
+    if(myRole==='sm')renderCurrentAct();
+  });
+
+  node.get('cards').map().on((d,k)=>{
+    if(!d||!k)return;
+    const [actId,...rest]=k.split('__C');
+    const cardKey='C'+rest.join('__C');
+    if(!st.cards[actId])st.cards[actId]={};
+    st.cards[actId][cardKey]={...d,_k:cardKey};
+    renderCurrentAct();
+  });
+
+  node.get('cardVotes').map().on((d,k)=>{
+    if(!k)return;
+    const [actId,cardUid]=k.split('__V');
+    if(!st.votes[actId])st.votes[actId]={};
+    if(d===null)delete st.votes[actId][cardUid];
+    else st.votes[actId][cardUid]=d;
+    renderCurrentAct();
+  });
+
+  node.get('pollVotes').map().on((d,k)=>{
+    if(!d||!k)return;
+    const [actId,uid]=k.split('__');
+    if(!st.pollVotes[actId])st.pollVotes[actId]={};
+    st.pollVotes[actId][uid]=d;
+    renderCurrentAct();
+    if(myRole==='sm')renderCurrentAct();
+  });
+
+  node.get('brainCards').map().on((d,k)=>{
+    if(!d||!k)return;
+    const[actId,...rest]=k.split('__B');
+    const bk='B'+rest.join('__B');
+    if(!st.brainCards[actId])st.brainCards[actId]={};
+    st.brainCards[actId][bk]={...d,_k:bk};
+    renderCurrentAct();
+  });
+
+  node.get('pollOther').map().on((d,k)=>{
+    if(!k)return;
+    const[actId,uid]=k.split('__');
+    if(!st.pollOtherText[actId])st.pollOtherText[actId]={};
+    if(d===null)delete st.pollOtherText[actId][uid];
+    else st.pollOtherText[actId][uid]=d;
+    renderCurrentAct();
+  });
+
+  node.get('openAnswers').map().on((d,k)=>{
+    if(!d||!k)return;
+    const[actId,uid]=k.split('__');
+    if(!st.openAnswers[actId])st.openAnswers[actId]={};
+    st.openAnswers[actId][uid]=d;
+    renderCurrentAct();
+  });
+}
+
+function setSynced(on){
+  ['build-sync','sm-sync','t-sync','act-sync'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.classList.toggle('off',!on);
+  });
+  ['build-sync-lbl','sm-sync-lbl','t-sync-lbl'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.textContent=on?'Live':'Connecting…';
+  });
+}
+
+// ── PHASE ─────────────────────────────────────────────────────────────
+function onPhaseChange(p){
+  if(p==='live'&&myRole==='team'){
+    if(curActIdx>=0)routeTeamToActivity(curActIdx);
+    else show('s-lobby');
+  }
+}
+
+function onActivityChange(){
+  revealed=false;quizAnswerRevealed=false;myVotesLeft=MAX_VOTES;
+  if(myRole==='sm'){updateProgList();renderCurrentAct();updateSMControls();}
+  else routeTeamToActivity(curActIdx);
+}
+
+// ── HOME ──────────────────────────────────────────────────────────────
+function goCreate(){
+  myName='Scrum Master';
+  myRole='sm';
+  const code=mkCode();
+  document.getElementById('build-code').textContent=code;
+  const url=location.href.split('?')[0]+'?join='+code;
+  document.getElementById('build-url').textContent=url;
+  // small QR for builder
+  document.getElementById('qr-small').innerHTML='';
+  try{new QRCode(document.getElementById('qr-small'),{text:url,width:64,height:64,colorDark:'#1B3A6B',colorLight:'#FFF',correctLevel:QRCode.CorrectLevel.L});}catch(e){}
+  document.getElementById('qr-wrap-build').innerHTML='';
+  try{new QRCode(document.getElementById('qr-wrap-build'),{text:url,width:120,height:120,colorDark:'#1B3A6B',colorLight:'#FFF',correctLevel:QRCode.CorrectLevel.M});}catch(e){}
+  show('s-build');
+  initGun(code);
+  node.get('participants').get(myUid).put({name:myName,role:'sm',joined:Date.now()});
+  node.get('meta').put({phase:'build',curActIdx:-1,revealed:false,quizRevealed:false});
+  updateTimerDisplay();
+}
+
+function goJoin(){
+  const p=new URLSearchParams(location.search);
+  const c=p.get('join');
+  if(c)document.getElementById('j-code').value=c.toUpperCase();
+  show('s-join');
+}
+
+function doJoin(){
+  const name=document.getElementById('j-name').value.trim();
+  const code=document.getElementById('j-code').value.trim().toUpperCase();
+  if(!name){toast('Enter your name','err');return;}
+  if(code.length!==6){toast('Code must be 6 chars','err');return;}
+  myName=name;myRole='team';myCode=code;
+  document.getElementById('t-code').textContent=code;
+  show('s-lobby');
+  initGun(code);
+  node.get('participants').get(myUid).put({name:myName,role:'team',joined:Date.now()});
+  // Check if already live
+  node.get('meta').once(d=>{
+    if(d&&d.phase==='live'){phase='live';curActIdx=d.curActIdx||0;routeTeamToActivity(curActIdx);}
+    else if(d&&d.phase==='done'){show('s-results');renderResults();}
+  });
+}
+
+// ── ACTIVITY MODAL ─────────────────────────────────────────────────────
+const ACT_DEFS={
+  mood:{icon:'😊',label:'Mood Check-in',defaultTitle:'Mood Check-in'},
+  board:{icon:'🗂️',label:'Board',defaultTitle:'Sprint Board'},
+  poll:{icon:'📊',label:'Poll',defaultTitle:'Team Poll'},
+  quiz:{icon:'🧠',label:'Quiz',defaultTitle:'Sprint Quiz'},
+  brain:{icon:'⚡',label:'Brainstorm',defaultTitle:'Brainstorm'},
+  openq:{icon:'💬',label:'Open Question',defaultTitle:'Open Question'},
+  slide:{icon:'📋',label:'Info Slide',defaultTitle:'Information'},
+};
+
+function openActModal(type,editIdx=-1){
+  modalActType=type;
+  modalEditIdx=editIdx;
+  const def=ACT_DEFS[type];
+  const existing=editIdx>=0?activities[editIdx]:null;
+  const cfg=existing?existing.config:{};
+  document.getElementById('actModal-title').textContent=(editIdx>=0?'Edit':'Add')+' '+def.label;
+
+  let html=`<div class="field"><label>Title</label><input class="inp" id="am-title" value="${esc(existing?existing.title:def.defaultTitle)}" placeholder="${def.defaultTitle}"></div>`;
+
+  if(type==='board'){
+    html+=`<div class="field"><label>Column 1 label</label><input class="inp" id="am-c0" value="${esc(cfg.c0||'👑 What Went Well')}"></div>`;
+    html+=`<div class="field"><label>Column 2 label</label><input class="inp" id="am-c1" value="${esc(cfg.c1||'🔥 What Needs Work')}"></div>`;
+    html+=`<div class="field"><label>Column 3 label</label><input class="inp" id="am-c2" value="${esc(cfg.c2||'⚡ Action Items')}"></div>`;
+    html+=`<div style="display:flex;align-items:center;gap:9px;padding:10px;background:var(--navy-bg);border-radius:8px;">
+      <label class="sw" style="filter:none;"><input type="checkbox" id="am-voting" ${cfg.voting?'checked':''}><span class="sw-sl" style="background:var(--gray-b);"></span></label>
+      <div style="font-size:.82rem;font-weight:600;color:var(--navy);">Enable dot voting after submission</div></div>`;
+  }
+  if(type==='poll'||type==='quiz'){
+    const existingOpts=cfg.options?Object.values(cfg.options):['',''];
+    const optRows=existingOpts.map((v,i)=>`<div class="am-opt-row" id="am-opt-row-${i}" style="display:flex;gap:6px;margin-bottom:6px;">
+      <input class="inp" style="flex:1;" placeholder="Option ${i+1}" value="${esc(v)}" oninput="updateQuizCorrectDropdown()">
+      <button type="button" class="btn btn-g" style="padding:6px 10px;font-size:1rem;" onclick="removeModalOption(this)" title="Remove">✕</button>
+    </div>`).join('');
+    html+=`<div class="field"><label>Question</label><input class="inp" id="am-q" value="${esc(cfg.question||'')}" placeholder="e.g. What should be our focus next sprint?"></div>
+    <div class="field"><label>Options</label>
+      <div id="am-opts-list">${optRows}</div>
+      <button type="button" class="btn btn-o btn-sm" style="margin-top:4px;" onclick="addModalOption()">+ Add Option</button>
+    </div>`;
+    html+=`<div style="display:flex;flex-direction:column;gap:8px;padding:10px;background:var(--navy-bg);border-radius:8px;">
+      <div style="display:flex;align-items:center;gap:9px;">
+        <label class="sw" style="filter:none;"><input type="checkbox" id="am-multi" ${cfg.multiSelect?'checked':''}><span class="sw-sl" style="background:var(--gray-b);"></span></label>
+        <div><div style="font-size:.82rem;font-weight:600;color:var(--navy);">Allow multiple selections</div><div style="font-size:.72rem;color:var(--gray);">Team can pick more than one option</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;">
+        <label class="sw" style="filter:none;"><input type="checkbox" id="am-other" ${cfg.includeOther?'checked':''}><span class="sw-sl" style="background:var(--gray-b);"></span></label>
+        <div><div style="font-size:.82rem;font-weight:600;color:var(--navy);">Include "Other" free-text option</div><div style="font-size:.72rem;color:var(--gray);">Team can type a custom answer</div></div>
+      </div>
+    </div>`;
+    if(type==='quiz'){
+      html+=`<div class="field"><label>Correct Answer</label><select class="inp" id="am-correct"></select></div>`;
+    }
+  }
+  if(type==='openq'){
+    html+=`<div class="field"><label>Question</label><input class="inp" id="am-q" value="${esc(cfg.question||'')}" placeholder="e.g. What's one thing we should stop doing?"></div>`;
+  }
+  if(type==='slide'){
+    html+=`<div class="field"><label>Heading <span style="color:var(--gray);font-weight:400;">(optional)</span></label><input class="inp" id="am-slide-heading" value="${esc(cfg.heading||'')}" placeholder="e.g. Sprint Goals"></div>`;
+    html+=`<div class="field"><label>Body text</label><textarea class="inp" id="am-slide-body" rows="6" placeholder="Write the content you want to present to the team…" style="resize:vertical;">${esc(cfg.body||'')}</textarea></div>`;
+    html+=`<p style="font-size:.75rem;color:var(--gray);">Team will see this as a read-only slide — no input required from them.</p>`;
+  }
+  if(type==='brain'){
+    html+=`<div class="field"><label>Prompt</label><input class="inp" id="am-prompt" value="${esc(cfg.prompt||'')}" placeholder="e.g. What would make the next sprint better?"></div>`;
+  }
+
+  document.getElementById('actModal-body').innerHTML=html;
+  if(type==='quiz')updateQuizCorrectDropdown(cfg.correct);
+  document.getElementById('actModal').classList.add('open');
+}
+
+function closeActModal(){document.getElementById('actModal').classList.remove('open');}
+
+function addModalOption(){
+  const list=document.getElementById('am-opts-list');if(!list)return;
+  const idx=list.children.length;
+  const row=document.createElement('div');
+  row.className='am-opt-row';row.style.cssText='display:flex;gap:6px;margin-bottom:6px;';
+  row.innerHTML=`<input class="inp" style="flex:1;" placeholder="Option ${idx+1}" value="" oninput="updateQuizCorrectDropdown()">
+    <button type="button" class="btn btn-g" style="padding:6px 10px;font-size:1rem;" onclick="removeModalOption(this)" title="Remove">✕</button>`;
+  list.appendChild(row);
+  updateQuizCorrectDropdown();
+  row.querySelector('input').focus();
+}
+
+function removeModalOption(btn){
+  const list=document.getElementById('am-opts-list');if(!list)return;
+  if(list.children.length<=2){toast('Keep at least 2 options','err');return;}
+  btn.parentElement.remove();
+  updateQuizCorrectDropdown();
+}
+
+function updateQuizCorrectDropdown(prevCorrect){
+  const sel=document.getElementById('am-correct');if(!sel)return;
+  const list=document.getElementById('am-opts-list');if(!list)return;
+  const inputs=[...list.querySelectorAll('input')];
+  const prev=prevCorrect!==undefined?prevCorrect:sel.value;
+  sel.innerHTML=inputs.map((inp,i)=>`<option value="${i}" ${String(prev)===String(i)?'selected':''}>${esc(inp.value||'Option '+(i+1))}</option>`).join('');
+}
+
+function saveActModal(){
+  const type=modalActType,def=ACT_DEFS[type];
+  const title=document.getElementById('am-title')?.value.trim()||def.defaultTitle;
+  const cfg={};
+
+  if(type==='board'){
+    cfg.c0=document.getElementById('am-c0')?.value.trim()||'👑 What Went Well';
+    cfg.c1=document.getElementById('am-c1')?.value.trim()||'🔥 What Needs Work';
+    cfg.c2=document.getElementById('am-c2')?.value.trim()||'⚡ Action Items';
+    cfg.voting=document.getElementById('am-voting')?.checked;
+  }
+  if(type==='poll'||type==='quiz'){
+    const q=document.getElementById('am-q')?.value.trim();
+    if(!q){toast('Enter a question','err');return;}
+    const list=document.getElementById('am-opts-list');
+    const inputs=list?[...list.querySelectorAll('input')]:[];
+    const opts={};
+    inputs.forEach((inp,i)=>{const v=inp.value.trim();if(v)opts[i]=v;});
+    if(Object.keys(opts).length<2){toast('Add at least 2 options','err');return;}
+    cfg.question=q;cfg.options=opts;
+    cfg.multiSelect=document.getElementById('am-multi')?.checked||false;
+    cfg.includeOther=document.getElementById('am-other')?.checked||false;
+    if(type==='quiz')cfg.correct=document.getElementById('am-correct')?.value||'0';
+  }
+  if(type==='openq'){
+    const q=document.getElementById('am-q')?.value.trim();
+    if(!q){toast('Enter a question','err');return;}
+    cfg.question=q;
+  }
+  if(type==='brain'){
+    cfg.prompt=document.getElementById('am-prompt')?.value.trim()||'Share your ideas';
+  }
+  if(type==='slide'){
+    cfg.heading=document.getElementById('am-slide-heading')?.value.trim()||'';
+    cfg.body=document.getElementById('am-slide-body')?.value.trim()||'';
+    if(!cfg.body){toast('Enter some content for the slide','err');return;}
+  }
+
+  if(modalEditIdx>=0){
+    activities[modalEditIdx]={...activities[modalEditIdx],title,config:cfg};
+  }else{
+    const id='A'+Date.now()+Math.random().toString(36).slice(2,5).toUpperCase();
+    activities.push({id,type,title,config:cfg});
+    // Sync to Gun so team can load it
+    try{node.get('acts').get(id).put({type,title,config:JSON.stringify(cfg)});}catch(e){}
+  }
+
+  closeActModal();
+  renderAgenda();
+  updateLaunchBtn();
+}
+
+// ── AGENDA BUILDER ─────────────────────────────────────────────────────
+function renderAgenda(){
+  const el=document.getElementById('agenda-list');
+  const cnt=document.getElementById('agenda-count');
+  const hint=document.getElementById('agenda-hint');
+  const clearBtn=document.getElementById('clear-btn');
+  if(!el)return;
+  cnt.textContent=activities.length?`(${activities.length})`:'';
+  clearBtn.style.display=activities.length?'':'none';
+  hint.style.display=activities.length?'block':'none';
+  if(!activities.length){
+    el.innerHTML='<div class="empty-agenda"><div style="font-size:1.8rem;margin-bottom:8px;">🎯</div><p>Click an activity type on the left to add it to your game</p></div>';
+    return;
+  }
+  el.innerHTML=activities.map((a,i)=>{
+    const def=ACT_DEFS[a.type]||{icon:'?',label:a.type};
+    return `<div class="agenda-item">
+      <div class="agenda-num">${i+1}</div>
+      <div class="agenda-info">
+        <div class="agenda-title">${def.icon} ${esc(a.title)}</div>
+        <div class="agenda-type">${def.label}${a.type==='board'&&a.config.voting?' · with voting':''}</div>
+      </div>
+      <div class="agenda-actions">
+        ${i>0?`<div class="agenda-ord" onclick="moveAct(${i},-1)" title="Move up">↑</div>`:''}
+        ${i<activities.length-1?`<div class="agenda-ord" onclick="moveAct(${i},1)" title="Move down">↓</div>`:''}
+        <div class="agenda-ord" onclick="openActModal('${a.type}',${i})" title="Edit">✏️</div>
+        <div class="agenda-ord" onclick="removeAct(${i})" title="Remove" style="color:var(--coral);">✕</div>
+      </div>
+    </div>`;
+  }).join('');
+  updateLaunchBtn();
+}
+
+function moveAct(i,dir){
+  const j=i+dir;
+  if(j<0||j>=activities.length)return;
+  [activities[i],activities[j]]=[activities[j],activities[i]];
+  renderAgenda();
+}
+
+function removeAct(i){activities.splice(i,1);renderAgenda();updateLaunchBtn();}
+function clearAgenda(){if(confirm('Remove all activities?')){activities=[];renderAgenda();}}
+function updateLaunchBtn(){
+  const btn=document.getElementById('launch-btn');
+  if(btn)btn.disabled=activities.length===0;
+  const sBtn=document.getElementById('save-draft-btn');
+  if(sBtn)sBtn.disabled=activities.length===0;
+}
+
+function copyBuildUrl(){
+  const url=document.getElementById('build-url').textContent;
+  navigator.clipboard.writeText(url).then(()=>toast('Link copied!','ok'));
+}
+
+// ── LAUNCH SESSION ─────────────────────────────────────────────────────
+function launchSession(){
+  if(!activities.length){toast('Add at least one activity','err');return;}
+  try{
+    activities.forEach(a=>{
+      node.get('acts').get(a.id).put({type:a.type,title:a.title,config:JSON.stringify(a.config)});
+    });
+    const order=activities.map(a=>a.id);
+    node.get('activityOrder').put({order:JSON.stringify(order)});
+    node.get('meta').put({phase:'live',curActIdx:0,revealed:false,quizRevealed:false});
+  }catch(e){console.warn('Gun sync error on launch:',e);}
+  // Go live
+  curActIdx=0;
+  phase='live';
+  show('s-sm');
+  initSmQr();
+  updateProgList();
+  renderCurrentAct();
+  updateSMControls();
+  updateTimerDisplay();
+}
+
+// ── SM LIVE ────────────────────────────────────────────────────────────
+function renderProgList(){
+  const el=document.getElementById('prog-list');if(!el)return;
+  const pct=activities.length?Math.round(((curActIdx+1)/activities.length)*100):0;
+  const bar=document.getElementById('prog-bar');if(bar)bar.style.width=pct+'%';
+  el.innerHTML=activities.map((a,i)=>{
+    const def=ACT_DEFS[a.type]||{icon:'?'};
+    const cur=i===curActIdx,done=i<curActIdx;
+    return `<div class="prog-item ${cur?'current':''} ${done?'done':''}" onclick="jumpToActivity(${i})">
+      <div class="prog-num ${cur?'cur':''}">${done?'✓':i+1}</div>
+      ${def.icon} ${esc(a.title)}
+    </div>`;
+  }).join('');
+}
+function updateProgList(){renderProgList();}
+
+function updateSMControls(){
+  const act=activities[curActIdx];
+  const revRow=document.getElementById('reveal-row');
+  const quizSec=document.getElementById('quiz-reveal-section');
+  const badge=document.getElementById('sm-badge');
+  if(revRow)revRow.style.display=(act&&(act.type==='board'))&&act.config.voting?'flex':'none';
+  if(quizSec)quizSec.style.display=(act&&act.type==='quiz')?'block':'none';
+  if(badge&&act)badge.textContent=`${ACT_DEFS[act.type]?.icon||''} ${act.title}`;
+  document.getElementById('prev-btn').disabled=curActIdx<=0;
+  document.getElementById('next-btn').textContent=curActIdx>=activities.length-1?'End Session':'Next →';
+}
+
+function prevActivity(){if(curActIdx>0)jumpToActivity(curActIdx-1);}
+function nextActivity(){
+  if(curActIdx>=activities.length-1){showResults();return;}
+  jumpToActivity(curActIdx+1);
+}
+function jumpToActivity(i){
+  curActIdx=i;revealed=false;quizAnswerRevealed=false;myVotesLeft=MAX_VOTES;
+  node.get('meta').put({curActIdx:i,revealed:false,quizRevealed:false});
+  updateProgList();renderCurrentAct();updateSMControls();
+  const chk=document.getElementById('reveal-chk');if(chk)chk.checked=false;
+}
+
+function toggleReveal(on){
+  revealed=on;
+  node.get('meta').put({revealed:on});
+  renderCurrentAct();
+  toast(on?'Cards revealed!':'Cards hidden','ok');
+}
+
+function revealAnswer(){
+  quizAnswerRevealed=true;
+  node.get('meta').put({quizRevealed:true});
+  renderCurrentAct();
+  toast('Answer revealed!','ok');
+}
+
+function showResults(){
+  node.get('meta').put({phase:'done'});
+  phase='done';
+  show('s-results');
+  renderResults();
+}
+
+// ── RENDER CURRENT ACTIVITY ────────────────────────────────────────────
+function renderCurrentAct(){
+  const act=activities[curActIdx];
+  if(!act)return;
+  if(myRole==='sm') renderActForSM(act);
+  else renderActForTeam(act);
+}
+
+function renderActForSM(act){
+  const el=document.getElementById('sm-activity-view');if(!el)return;
+  const def=ACT_DEFS[act.type]||{icon:'?'};
+  const actId=act.id;
+
+  let html=`<div style="margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+    <span style="font-size:1.6rem;">${def.icon}</span>
+    <div><div style="font-size:1.1rem;font-weight:800;color:var(--navy);">${esc(act.title)}</div>
+    <div style="font-size:.78rem;color:var(--gray);">${def.label} · Activity ${curActIdx+1} of ${activities.length}</div></div>
+  </div>`;
+
+  if(act.type==='mood') html+=renderMoodResults(actId);
+  if(act.type==='board') html+=renderBoardSM(act,actId);
+  if(act.type==='poll'||act.type==='quiz') html+=renderPollResults(act,actId,true);
+  if(act.type==='brain') html+=renderBrainResults(act,actId);
+  if(act.type==='openq') html+=renderOpenQResults(act,actId);
+  if(act.type==='slide') html+=renderSlide(act,true);
+
+  el.innerHTML=html;
+}
+
+function renderActForTeam(act){
+  const actId=act.id;
+  const def=ACT_DEFS[act.type]||{icon:'?'};
+  const badge=document.getElementById('act-badge');
+  const banner=document.getElementById('act-banner');
+  if(badge)badge.textContent=`${def.icon} ${act.title}`;
+  if(banner)banner.innerHTML=`<b>${def.icon} ${esc(act.title)}</b> — ${activityBannerHint(act)}`;
+
+  const el=document.getElementById('act-body');if(!el)return;
+
+  if(act.type==='mood')   el.innerHTML=renderMoodTeam(actId);
+  if(act.type==='board')  el.innerHTML=renderBoardTeam(act,actId);
+  if(act.type==='poll')   el.innerHTML=renderPollTeam(act,actId,false);
+  if(act.type==='quiz')   el.innerHTML=renderPollTeam(act,actId,true);
+  if(act.type==='brain')  el.innerHTML=renderBrainTeam(act,actId);
+  if(act.type==='openq')  el.innerHTML=renderOpenQTeam(act,actId);
+  if(act.type==='slide')  el.innerHTML=renderSlide(act,false);
+}
+
+function activityBannerHint(act){
+  if(act.type==='mood')  return 'How are you feeling today?';
+  if(act.type==='board') return phase==='vote'?`You have <b id="votes-left">${myVotesLeft}</b> votes left`:'Add your cards anonymously';
+  if(act.type==='poll')  return act.config?.multiSelect?'Select all that apply':'Vote for one option';
+  if(act.type==='quiz')  return 'Pick the answer you think is correct';
+  if(act.type==='brain') return 'Share your ideas freely';
+  if(act.type==='openq') return 'Share your answer — responses are anonymous';
+  if(act.type==='slide') return 'Read the information below';
+  return '';
+}
+
+// ── MOOD RENDER ────────────────────────────────────────────────────────
+function renderMoodTeam(actId){
+  const submitted=mySubmitted[actId];
+  if(submitted){
+    return `<div class="wrap-sm" style="text-align:center;">
+      <div class="card">
+        <div style="font-size:3rem;margin-bottom:10px;">${MOODS_EM[submitted]||'🙂'}</div>
+        <p style="color:var(--green);font-weight:700;">Mood submitted!</p>
+        <p style="color:var(--gray);font-size:.85rem;margin-top:6px;">Waiting for others…</p>
+        <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      </div></div>`;
+  }
+  return `<div class="wrap-sm" style="text-align:center;">
+    <div class="card">
+      <h2 style="font-size:1.3rem;font-weight:800;color:var(--navy);margin-bottom:6px;">How are you feeling?</h2>
+      <p style="color:var(--gray);font-size:.86rem;">Pick the emoji that matches your energy right now</p>
+      <div class="mood-row">
+        ${[1,2,3,4,5].map(v=>`<button class="mood-btn" id="moodBtn${v}" onclick="submitMood('${actId}',${v})">${MOODS_EM[v]}</button>`).join('')}
+      </div>
+      <div class="mood-range"><span>Exhausted</span><span>Energised!</span></div>
+    </div></div>`;
+}
+
+function submitMood(actId,v){
+  mySubmitted[actId]=v;
+  node.get('moods').get(actId+'__'+myUid).put({value:v,name:myName});
+  renderActForTeam(activities[curActIdx]);
+  toast('Mood submitted!','ok');
+}
+
+function renderMoodResults(actId){
+  const moods=Object.values(st.moods[actId]||{}).filter(m=>m&&m.value);
+  const counts=[0,0,0,0,0];
+  moods.forEach(m=>{if(m.value>=1&&m.value<=5)counts[m.value-1]++;});
+  const max=Math.max(...counts,1),total=moods.length;
+  const avg=total?moods.reduce((s,m)=>s+m.value,0)/total:0;
+  return `<div class="card">
+    <div class="mood-bars">
+      ${counts.map((c,i)=>`<div class="mbar-w">
+        <div style="font-size:.72rem;font-weight:600;color:var(--gray);">${c}</div>
+        <div class="mbar-t"><div class="mbar-f" style="height:${Math.round((c/max)*100)}%;"></div></div>
+        <div style="font-size:1.3rem;">${MOODS_EM[i+1]}</div>
+      </div>`).join('')}
+    </div>
+    <p style="text-align:center;font-size:.82rem;color:var(--gray);">${total} response${total!==1?'s':''} · Avg: ${total?MOODS_EM[Math.round(avg)]+' '+avg.toFixed(1)+'/5':'–'}</p>
+  </div>`;
+}
+
+// ── BOARD RENDER ───────────────────────────────────────────────────────
+function cardVotesFor(actId,cardKey){
+  return Object.keys(st.votes[actId]||{}).filter(k=>k.startsWith(cardKey+'__')).length;
+}
+function iVoted(actId,cardKey){
+  return !!(st.votes[actId]||{})[cardKey+'__'+myUid];
+}
+
+function renderBoardCols(act,actId,isSm){
+  const cfg=act.config;
+  const cols=[
+    {id:'c0',label:cfg.c0||'👑 What Went Well',cls:'ww'},
+    {id:'c1',label:cfg.c1||'🔥 What Needs Work',cls:'nw'},
+    {id:'c2',label:cfg.c2||'⚡ Action Items',cls:'ai'},
+  ];
+  const isVoting=cfg.voting&&revealed;
+  const actCards=st.cards[actId]||{};
+  return cols.map(col=>{
+    let cards=Object.values(actCards).filter(c=>c&&c.col===col.id);
+    if(isVoting)cards.sort((a,b)=>cardVotesFor(actId,b._k)-cardVotesFor(actId,a._k));
+    else cards.sort((a,b)=>(a.ts||0)-(b.ts||0));
+    const cardsHtml=cards.length?cards.map(card=>{
+      const masked=!revealed&&!isSm&&card.authorId!==myUid;
+      const votes=cardVotesFor(actId,card._k);
+      const voted=iVoted(actId,card._k);
+      return `<div class="r-card ${col.cls}${masked?' masked':''}">
+        ${!masked?`<div>${esc(card.text)}</div>`:''}
+        ${isVoting&&!masked?`<div class="card-foot"><button class="vote-btn ${voted?'on':''}" onclick="doVote('${actId}','${card._k}')">👍 <span>${votes}</span></button></div>`:''}
+        ${!isVoting&&votes>0&&(revealed||isSm)?`<div class="card-foot"><span style="font-size:.76rem;color:var(--gray);font-weight:600;">👍 ${votes}</span></div>`:''}
+      </div>`;
+    }).join(''):`<div class="empty"><div class="empty-icon">✨</div><p>No cards yet</p></div>`;
+    const canAdd=!revealed&&!isVoting;
+    return `<div>
+      <div class="col-head ${col.cls}">${esc(col.label)}</div>
+      <div class="col-body">
+        ${cardsHtml}
+        ${canAdd?`
+          <button class="add-btn" onclick="showAdd('${actId}','${col.id}')" id="abtn_${actId}_${col.id}">+ Add card</button>
+          <div class="add-area" id="aarea_${actId}_${col.id}">
+            <textarea class="add-ta" id="ata_${actId}_${col.id}" rows="3" placeholder="Type your card…"
+              onkeydown="cardKey(event,'${actId}','${col.id}')"></textarea>
+            <div class="add-row">
+              <button class="btn btn-g btn-sm" onclick="hideAdd('${actId}','${col.id}')">Cancel</button>
+              <button class="btn btn-p btn-sm" onclick="addCard('${actId}','${col.id}')">Add</button>
+            </div>
+          </div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderBoardTeam(act,actId){
+  const cfg=act.config;
+  const isVoting=cfg.voting&&revealed;
+  const hint=isVoting
+    ?`<div class="banner" style="position:static;"><b>🗳️ Voting Phase</b> — You have <b id="votes-left">${myVotesLeft}</b> votes left. Click 👍 to vote!</div>`
+    :`<div class="banner" style="position:static;"><b>📝 Board</b> — Add your cards. They stay anonymous until revealed.</div>`;
+  return `${hint}<div class="wrap" style="padding-top:18px;"><div class="g3">${renderBoardCols(act,actId,false)}</div></div>`;
+}
+
+function renderBoardSM(act,actId){
+  const actCards=st.cards[actId]||{};
+  const total=Object.keys(actCards).length;
+  return `<div class="stat-row" style="margin-bottom:12px;">
+    <div class="stat-chip"><b>${total}</b> card${total!==1?'s':''} submitted</div>
+    ${act.config.voting?`<div class="stat-chip">Voting: <b>${revealed?'ON':'OFF'}</b></div>`:''}
+  </div>
+  <div class="g3">${renderBoardCols(act,actId,true)}</div>`;
+}
+
+function showAdd(aId,colId){document.getElementById('aarea_'+aId+'_'+colId)?.classList.add('open');document.getElementById('ata_'+aId+'_'+colId)?.focus();}
+function hideAdd(aId,colId){const a=document.getElementById('aarea_'+aId+'_'+colId);if(a)a.classList.remove('open');const t=document.getElementById('ata_'+aId+'_'+colId);if(t)t.value='';}
+function cardKey(e,aId,colId){if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))addCard(aId,colId);if(e.key==='Escape')hideAdd(aId,colId);}
+function addCard(aId,colId){
+  const ta=document.getElementById('ata_'+aId+'_'+colId);
+  const txt=ta?.value.trim();if(!txt){toast('Enter some text','err');return;}
+  const k='C'+Date.now()+Math.random().toString(36).slice(2,4);
+  node.get('cards').get(aId+'__'+k).put({text:txt,col:colId,authorId:myUid,ts:Date.now()});
+  hideAdd(aId,colId);toast('Card added!','ok');
+}
+function doVote(actId,cardKey){
+  const voted=iVoted(actId,cardKey);
+  if(voted){node.get('cardVotes').get(actId+'__V'+cardKey+'__'+myUid).put(null);myVotesLeft=Math.min(MAX_VOTES,myVotesLeft+1);}
+  else{if(myVotesLeft<=0){toast('No votes left!','err');return;}
+    node.get('cardVotes').get(actId+'__V'+cardKey+'__'+myUid).put(true);myVotesLeft--;}
+  const el=document.getElementById('votes-left');if(el)el.textContent=myVotesLeft;
+}
+
+// ── POLL / QUIZ RENDER ─────────────────────────────────────────────────
+// Pending multi-select state per activity
+const pendingSelections={};
+
+function parseSelection(raw){
+  if(!raw)return[];
+  if(typeof raw==='string'&&raw.startsWith('['))try{return JSON.parse(raw);}catch(e){}
+  return[String(raw)];
+}
+
+function renderPollTeam(act,actId,isQuiz){
+  const cfg=act.config;
+  const opts=cfg.options||{};
+  const multi=!!cfg.multiSelect;
+  const submitted=mySubmitted[actId];
+  const pv=st.pollVotes[actId]||{};
+  const total=Object.keys(pv).length;
+
+  const includeOther=!!cfg.includeOther;
+
+  if(submitted){
+    const counts={};Object.keys(opts).forEach(k=>counts[k]=0);
+    if(includeOther)counts['__other__']=0;
+    Object.values(pv).forEach(raw=>{parseSelection(raw).forEach(k=>{if(counts[k]!==undefined)counts[k]++;});});
+    const totalVotes=multi?Object.values(counts).reduce((a,b)=>a+b,0):total;
+    const submittedSel=parseSelection(submitted);
+    const otherTexts=Object.values(st.pollOtherText[actId]||{}).filter(Boolean);
+    const allEntries=[...Object.entries(opts),...(includeOther?[['__other__','Other']]:[])];
+    const barsHtml=allEntries.map(([k,label])=>{
+      const cnt=counts[k]||0,pct=totalVotes?Math.round(cnt/totalVotes*100):0;
+      const isCorrect=isQuiz&&quizAnswerRevealed&&k==cfg.correct;
+      const iMine=submittedSel.includes(k);
+      const extra=k==='__other__'&&otherTexts.length?`<div style="font-size:.72rem;color:var(--gray);margin-top:2px;">${otherTexts.map(t=>`"${esc(t)}"`).join(', ')}</div>`:'';
+      return `<div class="pbar-row">
+        <div class="pbar-label">${esc(label)}${isCorrect?' ✅':''}${iMine&&!isCorrect?' 👈':''}${extra}</div>
+        <div class="pbar-track"><div class="pbar-fill ${isCorrect?'correct-fill':''}" style="width:${pct}%;"></div></div>
+        <div class="pbar-cnt">${cnt}</div></div>`;
+    }).join('');
+    return `<div class="wrap-sm">
+      <div class="card">
+        <p style="font-weight:800;font-size:1rem;color:var(--navy);margin-bottom:12px;">${esc(cfg.question)}</p>
+        <div style="padding:12px;background:var(--navy-bg);border-radius:9px;">
+          <p class="section-head">Live Results · ${total} respondent${total!==1?'s':''}${multi?' · multi-select':''}</p>
+          ${barsHtml}
+        </div>
+        <p style="text-align:center;color:var(--green);font-size:.82rem;font-weight:600;margin-top:10px;">✓ Submitted!${isQuiz&&quizAnswerRevealed?' Answer revealed!':''}</p>
+      </div></div>`;
+  }
+
+  if(!pendingSelections[actId]) pendingSelections[actId]=new Set();
+  const hint=multi?'Select all that apply — then click Submit':(isQuiz?'Pick the answer you think is correct':'Select one option');
+  const allOpts=[...Object.entries(opts),...(includeOther?[['__other__','Other (type below)']]:[])];
+  const optBtns=allOpts.map(([k,label])=>{
+    if(multi) return `<button class="poll-opt" id="popt_${actId}_${k}" onclick="toggleMultiOpt('${actId}','${k}',this)">${esc(label)}</button>`;
+    return `<button class="poll-opt" onclick="castVote('${actId}','${k}',this)">${esc(label)}</button>`;
+  }).join('');
+  const otherInput=includeOther?`<div id="other-inp-wrap-${actId}" style="margin-top:8px;display:none;">
+    <input class="inp" id="other-inp-${actId}" placeholder="Describe your answer…">
+  </div>`:'';
+  const submitBtn=multi?`<button class="btn btn-p btn-block" style="margin-top:4px;" onclick="submitMultiVote('${actId}')">Submit Selections</button>`:
+    (includeOther?`<button class="btn btn-p btn-block" style="margin-top:4px;" onclick="submitSingleWithOther('${actId}')">Submit</button>`:'');
+  return `<div class="wrap-sm">
+    <div class="card">
+      <p style="font-weight:800;font-size:1.05rem;color:var(--navy);margin-bottom:4px;">${esc(cfg.question)}</p>
+      <p style="color:var(--gray);font-size:.8rem;">${hint}</p>
+      ${multi?`<p style="font-size:.72rem;color:var(--coral);font-weight:600;margin:6px 0 10px;" id="sel-count-${actId}">0 selected</p>`:'<div style="margin-bottom:12px;"></div>'}
+      <div class="poll-grid">${optBtns}</div>
+      ${otherInput}
+      ${submitBtn}
+    </div></div>`;
+}
+
+function toggleMultiOpt(actId,key,btn){
+  if(!pendingSelections[actId])pendingSelections[actId]=new Set();
+  const sel=pendingSelections[actId];
+  if(sel.has(key)){sel.delete(key);btn.classList.remove('picked');}
+  else{sel.add(key);btn.classList.add('picked');}
+  const cntEl=document.getElementById('sel-count-'+actId);
+  if(cntEl)cntEl.textContent=sel.size+' selected';
+  const wrap=document.getElementById('other-inp-wrap-'+actId);
+  if(wrap)wrap.style.display=sel.has('__other__')?'block':'none';
+}
+
+function submitMultiVote(actId){
+  const sel=pendingSelections[actId];
+  if(!sel||sel.size===0){toast('Select at least one option','err');return;}
+  if(sel.has('__other__')){
+    const otherTxt=document.getElementById('other-inp-'+actId)?.value.trim();
+    if(!otherTxt){toast('Please describe your "Other" answer','err');return;}
+    node.get('pollOther').get(actId+'__'+myUid).put(otherTxt);
+  }
+  const value=JSON.stringify([...sel]);
+  mySubmitted[actId]=value;
+  node.get('pollVotes').get(actId+'__'+myUid).put(value);
+  renderActForTeam(activities[curActIdx]);
+  toast('Submitted!','ok');
+}
+
+function castVote(actId,optKey,btn){
+  if(mySubmitted[actId])return;
+  document.querySelectorAll('.poll-opt').forEach(b=>b.classList.remove('picked'));
+  btn.classList.add('picked');
+  if(optKey==='__other__'){
+    const wrap=document.getElementById('other-inp-wrap-'+actId);
+    if(wrap)wrap.style.display='block';
+    // store selection but wait for submitSingleWithOther
+    pendingSelections[actId]=new Set(['__other__']);
+    return;
+  }
+  mySubmitted[actId]=optKey;
+  node.get('pollVotes').get(actId+'__'+myUid).put(optKey);
+  renderActForTeam(activities[curActIdx]);
+  toast('Vote recorded!','ok');
+}
+
+function submitSingleWithOther(actId){
+  const sel=pendingSelections[actId];
+  if(!sel||sel.size===0||![...sel].some(k=>k)){toast('Select an option','err');return;}
+  const key=[...sel][0];
+  if(key==='__other__'){
+    const txt=document.getElementById('other-inp-'+actId)?.value.trim();
+    if(!txt){toast('Please describe your "Other" answer','err');return;}
+    node.get('pollOther').get(actId+'__'+myUid).put(txt);
+  }
+  mySubmitted[actId]=key;
+  node.get('pollVotes').get(actId+'__'+myUid).put(key);
+  renderActForTeam(activities[curActIdx]);
+  toast('Vote recorded!','ok');
+}
+
+function renderPollResults(act,actId,isSm){
+  const cfg=act.config;
+  const opts=cfg.options||{};
+  const multi=!!cfg.multiSelect;
+  const includeOther=!!cfg.includeOther;
+  const pv=st.pollVotes[actId]||{};
+  const counts={};Object.keys(opts).forEach(k=>counts[k]=0);
+  if(includeOther)counts['__other__']=0;
+  Object.values(pv).forEach(raw=>{parseSelection(raw).forEach(k=>{if(counts[k]!==undefined)counts[k]++;});});
+  const total=Object.keys(pv).length;
+  const totalVotes=multi?Object.values(counts).reduce((a,b)=>a+b,0):total;
+  const otherTexts=Object.values(st.pollOtherText[actId]||{}).filter(Boolean);
+  const allEntries=[...Object.entries(opts),...(includeOther?[['__other__','Other']]:[])];
+  const barsHtml=allEntries.map(([k,label])=>{
+    const cnt=counts[k]||0,pct=totalVotes?Math.round(cnt/totalVotes*100):0;
+    const isCorrect=act.type==='quiz'&&quizAnswerRevealed&&k==cfg.correct;
+    const otherDetail=k==='__other__'&&otherTexts.length?`<div style="font-size:.72rem;color:var(--gray);margin-top:2px;">${otherTexts.map(t=>`"${esc(t)}"`).join(' · ')}</div>`:'';
+    return `<div class="pbar-row">
+      <div class="pbar-label">${esc(label)}${isCorrect?' ✅':''}${otherDetail}</div>
+      <div class="pbar-track"><div class="pbar-fill ${isCorrect?'correct-fill':''}" style="width:${pct}%;"></div></div>
+      <div class="pbar-cnt">${cnt}</div></div>`;
+  }).join('');
+  return `<div class="card">
+    <p style="font-weight:700;color:var(--navy);margin-bottom:12px;">${esc(cfg.question)}${multi?' <span style="font-size:.72rem;color:var(--coral);font-weight:600;background:var(--coral-bg);padding:2px 7px;border-radius:10px;margin-left:6px;">multi-select</span>':''}</p>
+    ${barsHtml}
+    <p style="font-size:.75rem;color:var(--gray);margin-top:10px;">${total} respondent${total!==1?'s':''}${multi?' · '+totalVotes+' total selection'+(totalVotes!==1?'s':''):''}</p>
+    ${act.type==='quiz'&&isSm&&!quizAnswerRevealed?`<div class="quiz-reveal-btn"><button class="btn btn-p btn-sm" onclick="revealAnswer()">🎯 Reveal Answer</button></div>`:''}
+    ${act.type==='quiz'&&quizAnswerRevealed?`<p style="color:var(--green);font-size:.82rem;font-weight:600;margin-top:10px;">Answer revealed: ${esc(opts[cfg.correct]||'')}</p>`:''}
+  </div>`;
+}
+
+// ── BRAINSTORM RENDER ──────────────────────────────────────────────────
+function renderBrainTeam(act,actId){
+  const cfg=act.config;
+  const ideas=Object.values(st.brainCards[actId]||{});
+  const submitted=mySubmitted[actId];
+  return `<div class="wrap-md" style="flex:1;">
+    <div class="card" style="margin-bottom:14px;">
+      <h2 style="font-size:1.1rem;font-weight:800;color:var(--navy);margin-bottom:4px;">${esc(cfg.prompt||'Share your ideas')}</h2>
+      <p style="color:var(--gray);font-size:.82rem;">All ideas are anonymous — share freely!</p>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <textarea class="inp" id="brain-inp" rows="2" placeholder="Type an idea and press Add…" style="resize:none;"></textarea>
+        <button class="btn btn-p" onclick="addBrainCard('${actId}')">Add</button>
+      </div>
+    </div>
+    <div class="bs-list">${ideas.map(c=>`<div class="bs-card">${esc(c.text)}</div>`).join('')}
+    ${!ideas.length?`<div class="empty"><div class="empty-icon">💡</div><p>No ideas yet — be the first!</p></div>`:''}
+    </div>
+  </div>`;
+}
+
+function addBrainCard(actId){
+  const el=document.getElementById('brain-inp');
+  const txt=el?.value.trim();if(!txt){toast('Enter an idea','err');return;}
+  const k='B'+Date.now()+Math.random().toString(36).slice(2,4);
+  node.get('brainCards').get(actId+'__'+k).put({text:txt,authorId:myUid,ts:Date.now()});
+  el.value='';toast('Idea added!','ok');
+}
+
+function renderBrainResults(act,actId){
+  const ideas=Object.values(st.brainCards[actId]||{});
+  return `<div class="card">
+    <p style="font-weight:700;color:var(--navy);margin-bottom:12px;">${esc(act.config.prompt||'Ideas')}</p>
+    <div class="bs-list">${ideas.map(c=>`<div class="bs-card">${esc(c.text)}</div>`).join('')}
+    ${!ideas.length?`<div class="empty"><p>No ideas submitted yet</p></div>`:''}
+    </div>
+    <p style="font-size:.75rem;color:var(--gray);margin-top:10px;">${ideas.length} idea${ideas.length!==1?'s':''}</p>
+  </div>`;
+}
+
+// ── OPEN QUESTION RENDER ───────────────────────────────────────────────
+function renderOpenQTeam(act,actId){
+  const cfg=act.config;
+  const submitted=mySubmitted[actId];
+  const answers=Object.values(st.openAnswers[actId]||{}).filter(a=>a&&a.text);
+  if(submitted){
+    return `<div class="wrap-sm"><div class="card">
+      <p style="font-weight:800;font-size:1rem;color:var(--navy);margin-bottom:12px;">${esc(cfg.question)}</p>
+      <p style="text-align:center;color:var(--green);font-size:.82rem;font-weight:600;margin-bottom:12px;">✓ Submitted!</p>
+      <div style="padding:12px;background:var(--navy-bg);border-radius:9px;">
+        <p class="section-head">${answers.length} response${answers.length!==1?'s':''} so far</p>
+        <div class="bs-list">${answers.map(a=>`<div class="bs-card">${esc(a.text)}</div>`).join('')}
+        ${!answers.length?`<div class="empty"><p>Waiting for responses…</p></div>`:''}
+        </div>
+      </div>
+    </div></div>`;
+  }
+  return `<div class="wrap-sm"><div class="card">
+    <p style="font-weight:800;font-size:1.05rem;color:var(--navy);margin-bottom:4px;">${esc(cfg.question)}</p>
+    <p style="color:var(--gray);font-size:.8rem;margin-bottom:12px;">Share your thoughts — responses are anonymous</p>
+    <textarea class="inp" id="openq-inp-${actId}" rows="3" placeholder="Type your answer here…" style="resize:none;width:100%;"></textarea>
+    <button class="btn btn-p btn-block" style="margin-top:8px;" onclick="submitOpenQ('${actId}')">Submit Answer</button>
+  </div></div>`;
+}
+
+function submitOpenQ(actId){
+  if(mySubmitted[actId])return;
+  const txt=document.getElementById('openq-inp-'+actId)?.value.trim();
+  if(!txt){toast('Enter your answer','err');return;}
+  mySubmitted[actId]=txt;
+  node.get('openAnswers').get(actId+'__'+myUid).put({text:txt,ts:Date.now()});
+  renderActForTeam(activities[curActIdx]);
+  toast('Answer submitted!','ok');
+}
+
+function renderOpenQResults(act,actId){
+  const answers=Object.values(st.openAnswers[actId]||{}).filter(a=>a&&a.text).sort((a,b)=>(a.ts||0)-(b.ts||0));
+  return `<div class="card">
+    <p style="font-weight:700;color:var(--navy);margin-bottom:12px;">${esc(act.config.question||'Open Question')}</p>
+    <div class="bs-list">${answers.map(a=>`<div class="bs-card">${esc(a.text)}</div>`).join('')}
+    ${!answers.length?`<div class="empty"><p>No answers submitted yet</p></div>`:''}
+    </div>
+    <p style="font-size:.75rem;color:var(--gray);margin-top:10px;">${answers.length} answer${answers.length!==1?'s':''}</p>
+  </div>`;
+}
+
+// ── INFO SLIDE RENDER ──────────────────────────────────────────────────
+function renderSlide(act,forSm){
+  const cfg=act.config;
+  const inner=`
+    ${cfg.heading?`<p style="font-size:1.15rem;font-weight:800;color:var(--navy);margin-bottom:14px;">${esc(cfg.heading)}</p>`:''}
+    <div style="font-size:.95rem;line-height:1.7;color:var(--text);white-space:pre-wrap;">${esc(cfg.body||'')}</div>
+    ${forSm?'<p style="font-size:.72rem;color:var(--gray);margin-top:14px;font-style:italic;">Team is viewing this slide — no action required from them.</p>':''}
+  `;
+  if(forSm) return `<div class="card">${inner}</div>`;
+  return `<div class="wrap-md" style="flex:1;"><div class="card" style="padding:28px 24px;">${inner}</div></div>`;
+}
+
+// ── TEAM ROUTING ───────────────────────────────────────────────────────
+function routeTeamToActivity(idx){
+  const act=activities[idx];
+  if(!act){show('s-lobby');return;}
+  curActIdx=idx;
+  show('s-activity');
+  renderActForTeam(act);
+}
+
+// ── PARTICIPANTS ───────────────────────────────────────────────────────
+function renderParticipants(){
+  const list=Object.values(st.participants).filter(p=>p&&p.name);
+  const html=list.map(p=>`<div class="chip"><div class="chip-dot"></div>${esc(p.name)}${p.role==='sm'?' 👑':''}</div>`).join('');
+  const empty='<span style="opacity:.5;font-size:.8rem;">Waiting…</span>';
+  ['sm-p-list','t-p-list'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=list.length?html:empty;});
+  const cnt=document.getElementById('sm-p-cnt');if(cnt)cnt.textContent=list.length;
+}
+
+// ── RESULTS ───────────────────────────────────────────────────────────
+function renderResults(){
+  const parts=Object.values(st.participants).filter(p=>p).length;
+  const sub=document.getElementById('res-sub');
+  if(sub)sub.textContent=`${parts} participant${parts!==1?'s':''} · ${activities.length} activit${activities.length!==1?'ies':'y'}`;
+  const stats=document.getElementById('res-stats');
+  if(stats)stats.innerHTML=`<div class="stat-chip">👥 <b>${parts}</b> participants</div><div class="stat-chip">🎯 <b>${activities.length}</b> activities</div>`;
+  const body=document.getElementById('res-body');
+  if(!body)return;
+  body.innerHTML=activities.map((act,i)=>{
+    const def=ACT_DEFS[act.type]||{icon:'?',label:act.type};
+    let content='';
+    if(act.type==='mood') content=renderMoodResults(act.id);
+    if(act.type==='board'){
+      const cfg=act.config;
+      const cols=[{id:'c0',label:cfg.c0||'👑 What Went Well',cls:'ww'},{id:'c1',label:cfg.c1||'🔥 What Needs Work',cls:'nw'},{id:'c2',label:cfg.c2||'⚡ Action Items',cls:'ai'}];
+      const actCards=st.cards[act.id]||{};
+      content=`<div class="g3">${cols.map(col=>{
+        const cards=Object.values(actCards).filter(c=>c&&c.col===col.id).sort((a,b)=>cardVotesFor(act.id,b._k)-cardVotesFor(act.id,a._k));
+        return `<div><div class="col-head ${col.cls}">${esc(col.label)}</div><div class="col-body">
+          ${cards.length?cards.map(c=>{const v=cardVotesFor(act.id,c._k);return `<div class="r-card ${col.cls}">${esc(c.text)}${v?`<div class="card-foot"><span style="font-size:.74rem;color:var(--gray);font-weight:600;">👍 ${v}</span></div>`:''}</div>`;}).join(''):'<div class="empty"><p>No items</p></div>'}
+        </div></div>`;
+      }).join('')}</div>`;
+    }
+    if(act.type==='poll'||act.type==='quiz') content=renderPollResults(act,act.id,false);
+    if(act.type==='brain') content=renderBrainResults(act,act.id);
+    if(act.type==='openq') content=renderOpenQResults(act,act.id);
+    if(act.type==='slide') content=renderSlide(act,true);
+    return `<div class="results-activity">
+      <div class="activity-result-head">
+        <div class="activity-result-num">${i+1}</div>
+        <div>
+          <div style="font-size:.95rem;font-weight:700;color:var(--navy);">${def.icon} ${esc(act.title)}</div>
+          <div style="font-size:.72rem;color:var(--gray);">${def.label}</div>
+        </div>
+      </div>
+      ${content}
+    </div>`;
+  }).join('');
+}
+
+// ── DRAFT SAVE / LOAD ──────────────────────────────────────────────────
+const DRAFTS_KEY='wom_drafts';
+
+function getDrafts(){try{return JSON.parse(localStorage.getItem(DRAFTS_KEY)||'{}');}catch(e){return{};}}
+function saveDrafts(d){localStorage.setItem(DRAFTS_KEY,JSON.stringify(d));}
+
+function openSaveDraftModal(){
+  const defaultName=`Draft ${new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short'})}`;
+  const existing=getDrafts();
+  const inp=document.getElementById('draft-name-inp');
+  if(inp)inp.value=Object.keys(existing).length===0?defaultName:defaultName;
+  document.getElementById('saveDraftModal').classList.add('open');
+  setTimeout(()=>inp&&inp.select(),50);
+}
+
+function confirmSaveDraft(){
+  const name=document.getElementById('draft-name-inp')?.value.trim();
+  if(!name){toast('Enter a name for this draft','err');return;}
+  const drafts=getDrafts();
+  drafts[name]={activities,savedAt:Date.now()};
+  saveDrafts(drafts);
+  closeModal('saveDraftModal');
+  toast(`Draft "${name}" saved!`,'ok');
+}
+
+function openLoadDraftModal(){
+  const drafts=getDrafts();
+  const el=document.getElementById('draft-list');
+  if(!el)return;
+  const keys=Object.keys(drafts);
+  if(!keys.length){
+    el.innerHTML=`<div class="empty"><div class="empty-icon">📭</div><p>No saved drafts yet.<br>Build a game and click <strong>Save Draft</strong>.</p></div>`;
+  } else {
+    el.innerHTML=keys.sort((a,b)=>drafts[b].savedAt-drafts[a].savedAt).map(name=>{
+      const d=drafts[name];
+      const date=new Date(d.savedAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+      const actCount=(d.activities||[]).length;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:9px;background:var(--gray-l);border:1.5px solid var(--gray-b);">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:.9rem;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(name)}</div>
+          <div style="font-size:.72rem;color:var(--gray);margin-top:2px;">${actCount} activit${actCount!==1?'ies':'y'} · Saved ${date}</div>
+        </div>
+        <button class="btn btn-p btn-sm" onclick="loadDraft('${esc(name).replace(/'/g,"\\'")}')">Load</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteDraft('${esc(name).replace(/'/g,"\\'")}')">Delete</button>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('loadDraftModal').classList.add('open');
+}
+
+function loadDraft(name){
+  const drafts=getDrafts();
+  const draft=drafts[name];
+  if(!draft){toast('Draft not found','err');return;}
+  if(activities.length>0&&!confirm('Replace current game with this draft?'))return;
+  activities=[...(draft.activities||[])];
+  closeModal('loadDraftModal');
+  renderAgenda();
+  updateLaunchBtn();
+  toast(`Loaded "${name}"!`,'ok');
+}
+
+function deleteDraft(name){
+  if(!confirm(`Delete draft "${name}"?`))return;
+  const drafts=getDrafts();
+  delete drafts[name];
+  saveDrafts(drafts);
+  openLoadDraftModal(); // refresh list
+  toast('Draft deleted','ok');
+}
+
+function closeModal(id){document.getElementById(id)?.classList.remove('open');}
+
+// ── EXCEL EXPORT ───────────────────────────────────────────────────────
+function exportXlsx(){
+  if(typeof XLSX==='undefined'){toast('SheetJS not loaded yet, try again','err');return;}
+  const wb=XLSX.utils.book_new();
+  const navy='FF1B3A6B', coral='FFFF6B6B', headerFill={patternType:'solid',fgColor:{rgb:navy}};
+  const hStyle={fill:headerFill,font:{bold:true,color:{rgb:'FFFFFFFF'},name:'Arial',sz:10},alignment:{horizontal:'center'}};
+  const dateStr=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+
+  // ── Sheet 1: Overview ──
+  const parts=Object.values(st.participants).filter(p=>p&&p.name);
+  const moods=Object.values(st.moods).flatMap(m=>Object.values(m||{})).filter(m=>m&&m.value);
+  const avgMood=moods.length?moods.reduce((s,m)=>s+m.value,0)/moods.length:0;
+  const overviewData=[
+    ['(Wo)mentimeter — Game Summary'],
+    ['Generated',dateStr],
+    [''],
+    ['Metric','Value'],
+    ['Participants',parts.length],
+    ['Activities',activities.length],
+    ['Date',dateStr],
+    ...(moods.length?[['Average Team Mood',avgMood.toFixed(1)+'/5 '+MOODS_EM[Math.round(avgMood)]]]:[]),
+    [''],
+    ['#','Activity','Type'],
+    ...activities.map((a,i)=>[i+1,a.title,(ACT_DEFS[a.type]||{label:a.type}).label]),
+  ];
+  const wsOverview=XLSX.utils.aoa_to_sheet(overviewData);
+  wsOverview['!cols']=[{wch:28},{wch:28},{wch:22}];
+  styleOverviewSheet(wsOverview,overviewData.length);
+  XLSX.utils.book_append_sheet(wb,wsOverview,'Overview');
+
+  // ── Per-activity sheets ──
+  activities.forEach((act,i)=>{
+    const def=ACT_DEFS[act.type]||{label:act.type};
+    const sheetName=`${i+1}. ${act.title}`.slice(0,31).replace(/[:\\\/\?\*\[\]]/g,'');
+    let ws;
+
+    if(act.type==='mood'){
+      const moodData=Object.values(st.moods[act.id]||{}).filter(m=>m&&m.value);
+      const counts=[0,0,0,0,0];
+      moodData.forEach(m=>{if(m.value>=1&&m.value<=5)counts[m.value-1]++;});
+      const total=moodData.length;
+      const avg=total?moodData.reduce((s,m)=>s+m.value,0)/total:0;
+      const rows=[
+        [act.title,''],
+        ['Mood','Count','% of Responses'],
+        ...counts.map((c,j)=>[MOODS_EM[j+1]+' '+['Exhausted','Stressed','Neutral','Good','Energised'][j],c,total?+(c/total*100).toFixed(1):0]),
+        [''],
+        ['Total Responses',total,''],
+        ['Average Score',+avg.toFixed(2),'/ 5'],
+      ];
+      ws=XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols']=[{wch:22},{wch:10},{wch:18}];
+    }
+
+    else if(act.type==='board'){
+      const cfg=act.config;
+      const cols=[{id:'c0',label:cfg.c0||'What Went Well'},{id:'c1',label:cfg.c1||'What Needs Work'},{id:'c2',label:cfg.c2||'Action Items'}];
+      const actCards=st.cards[act.id]||{};
+      const allRows=[['Column','Card Text','Votes']];
+      cols.forEach(col=>{
+        const cards=Object.values(actCards).filter(c=>c&&c.col===col.id).sort((a,b)=>cardVotesFor(act.id,b._k)-cardVotesFor(act.id,a._k));
+        cards.forEach(c=>allRows.push([col.label,c.text,cardVotesFor(act.id,c._k)]));
+        if(!cards.length)allRows.push([col.label,'(no cards)',0]);
+        allRows.push(['','','']);
+      });
+      ws=XLSX.utils.aoa_to_sheet(allRows);
+      ws['!cols']=[{wch:26},{wch:50},{wch:8}];
+    }
+
+    else if(act.type==='poll'||act.type==='quiz'){
+      const cfg=act.config;
+      const opts=cfg.options||{};
+      const includeOther=!!cfg.includeOther;
+      const pv=st.pollVotes[act.id]||{};
+      const counts={};Object.keys(opts).forEach(k=>counts[k]=0);
+      if(includeOther)counts['__other__']=0;
+      Object.values(pv).forEach(raw=>{parseSelection(raw).forEach(k=>{if(counts[k]!==undefined)counts[k]++;});});
+      const respondents=Object.keys(pv).length;
+      const totalVotes=cfg.multiSelect?Object.values(counts).reduce((a,b)=>a+b,0):respondents;
+      const otherTexts=Object.values(st.pollOtherText[act.id]||{}).filter(Boolean);
+      const allEntries=[...Object.entries(opts),...(includeOther?[['__other__','Other']]:[])];
+      const rows=[
+        [act.title,'',''],
+        ['Question',cfg.question,''],
+        ['Multi-select',cfg.multiSelect?'Yes':'No',''],
+        [''],
+        ['Option','Votes','% of Votes'],
+        ...allEntries.map(([k,label])=>{
+          const cnt=counts[k]||0;
+          const correct=act.type==='quiz'&&k==cfg.correct;
+          return [label+(correct?' ✅':''),cnt,totalVotes?+(cnt/totalVotes*100).toFixed(1):0];
+        }),
+        ...(includeOther&&otherTexts.length?[[''],['Other responses:',''],
+          ...otherTexts.map((t,i)=>[i+1,t,''])]:[]),
+        [''],
+        ['Total Respondents',respondents,''],
+        ...(cfg.multiSelect?[['Total Selections',totalVotes,'']]:[]),
+        ...(act.type==='quiz'?[['Correct Answer',opts[cfg.correct]||'','']]:[]),
+      ];
+      ws=XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols']=[{wch:34},{wch:10},{wch:14}];
+    }
+
+    else if(act.type==='openq'){
+      const answers=Object.values(st.openAnswers[act.id]||{}).filter(a=>a&&a.text).sort((a,b)=>(a.ts||0)-(b.ts||0));
+      const rows=[
+        [act.title],
+        ['Question',act.config.question||''],
+        [''],
+        ['#','Answer'],
+        ...answers.map((a,j)=>[j+1,a.text]),
+        ...(answers.length===0?[['','(no answers submitted)']]:[[],['Total',answers.length]]),
+      ];
+      ws=XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols']=[{wch:6},{wch:70}];
+    }
+
+    else if(act.type==='slide'){
+      const cfg=act.config;
+      const rows=[
+        [act.title],
+        ...(cfg.heading?[['Heading',cfg.heading]]:[] ),
+        [''],
+        ['Content'],
+        [cfg.body||''],
+      ];
+      ws=XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols']=[{wch:12},{wch:80}];
+    }
+
+    else if(act.type==='brain'){
+      const ideas=Object.values(st.brainCards[act.id]||{}).sort((a,b)=>(a.ts||0)-(b.ts||0));
+      const rows=[
+        [act.title],
+        ['Prompt',act.config.prompt||''],
+        [''],
+        ['#','Idea'],
+        ...ideas.map((c,j)=>[j+1,c.text]),
+        ...(ideas.length===0?[['','(no ideas submitted)']]:[[],['Total',ideas.length]]),
+      ];
+      ws=XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols']=[{wch:6},{wch:64}];
+    }
+
+    if(ws){
+      styleActivitySheet(ws,act.type);
+      XLSX.utils.book_append_sheet(wb,ws,sheetName);
+    }
+  });
+
+  // Save
+  const filename=`wom-results-${new Date().toISOString().slice(0,10)}.xlsx`;
+  XLSX.writeFile(wb,filename);
+  toast('Excel file exported!','ok');
+}
+
+function styleOverviewSheet(ws,rowCount){
+  // Title row
+  const titleCell=ws['A1'];if(titleCell){titleCell.s={font:{bold:true,sz:14,color:{rgb:'FF1B3A6B'},name:'Arial'},alignment:{horizontal:'left'}};}
+  // Header rows (row 4 "Metric/Value", row 10 "#/Activity/Type")
+  [4,10].forEach(r=>{
+    ['A','B','C'].forEach(c=>{const cell=ws[c+r];if(cell)cell.s={fill:{patternType:'solid',fgColor:{rgb:'FF1B3A6B'}},font:{bold:true,color:{rgb:'FFFFFFFF'},name:'Arial',sz:10},alignment:{horizontal:'left'}};});
+  });
+}
+function styleActivitySheet(ws,type){
+  const col=type==='board'?'FFFF6B6B':type==='mood'?'FF7C3AED':type==='quiz'?'FF10B981':type==='brain'?'FFF59E0B':'FF1B3A6B';
+  // Style A1 as coloured header
+  const a1=ws['A1'];if(a1)a1.s={fill:{patternType:'solid',fgColor:{rgb:col}},font:{bold:true,color:{rgb:'FFFFFFFF'},name:'Arial',sz:11}};
+}
+
+function exportMd(){
+  const lines=[`# Sprint Game Summary`,`> Generated ${new Date().toLocaleDateString()}`,``];
+  activities.forEach((act,i)=>{
+    const def=ACT_DEFS[act.type]||{icon:'?'};
+    lines.push(`## ${i+1}. ${def.icon} ${act.title} (${def.label})`);
+    if(act.type==='mood'){
+      const moods=Object.values(st.moods[act.id]||{}).filter(m=>m&&m.value);
+      const avg=moods.length?moods.reduce((s,m)=>s+m.value,0)/moods.length:0;
+      lines.push(`Average mood: ${MOODS_EM[Math.round(avg)]} (${avg.toFixed(1)}/5) — ${moods.length} responses`);
+    }
+    if(act.type==='board'){
+      const cols=[{id:'c0',label:act.config.c0||'What Went Well'},{id:'c1',label:act.config.c1||'What Needs Work'},{id:'c2',label:act.config.c2||'Action Items'}];
+      const actCards=st.cards[act.id]||{};
+      cols.forEach(col=>{
+        lines.push(`\n### ${col.label}`);
+        const cards=Object.values(actCards).filter(c=>c&&c.col===col.id).sort((a,b)=>cardVotesFor(act.id,b._k)-cardVotesFor(act.id,a._k));
+        cards.length?cards.forEach(c=>{const v=cardVotesFor(act.id,c._k);lines.push(`- ${c.text}${v?' (👍 '+v+')':''}`);})
+          :lines.push('(none)');
+      });
+    }
+    if(act.type==='poll'||act.type==='quiz'){
+      lines.push(act.config.question);
+      const opts=act.config.options||{};const pv=st.pollVotes[act.id]||{};
+      const counts={};Object.keys(opts).forEach(k=>counts[k]=0);
+      Object.values(pv).forEach(o=>{if(counts[o]!==undefined)counts[o]++;});
+      const total=Object.keys(pv).length;
+      Object.entries(opts).forEach(([k,label])=>{
+        const pct=total?Math.round((counts[k]||0)/total*100):0;
+        const correct=act.type==='quiz'&&k==act.config.correct;
+        lines.push(`- ${label}: ${counts[k]||0} votes (${pct}%)${correct?' ✅ correct':''}`);
+      });
+    }
+    if(act.type==='brain'){
+      lines.push(act.config.prompt||'');
+      Object.values(st.brainCards[act.id]||{}).forEach(c=>lines.push(`- ${c.text}`));
+    }
+    lines.push('');
+  });
+  const blob=new Blob([lines.join('\n')],{type:'text/markdown'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='summary.md';a.click();
+  toast('Exported!','ok');
+}
+
+// ── TIMER ─────────────────────────────────────────────────────────────
+function resetTimer(m){timerSecs=m*60;if(timerRunning){clearInterval(timerInt);timerRunning=false;document.getElementById('timer-btn').textContent='▶ Start';}updateTimerDisplay();}
+function toggleTimer(){
+  if(timerRunning){clearInterval(timerInt);timerRunning=false;document.getElementById('timer-btn').textContent='▶ Start';}
+  else{timerRunning=true;document.getElementById('timer-btn').textContent='⏸ Pause';
+    timerInt=setInterval(()=>{timerSecs--;updateTimerDisplay();if(timerSecs<=0){clearInterval(timerInt);timerRunning=false;document.getElementById('timer-btn').textContent='▶ Start';toast('⏰ Time\'s up!','err');}},1000);}
+}
+function updateTimerDisplay(){
+  const m=Math.floor(Math.max(0,timerSecs)/60),s=Math.max(0,timerSecs)%60;
+  const el=document.getElementById('timer-num');
+  if(el){el.textContent=`${m}:${s.toString().padStart(2,'0')}`;el.classList.toggle('warn',timerSecs<=60&&timerSecs>0);}
+}
+
+// ── SM QR ──────────────────────────────────────────────────────────────
+function initSmQr(){
+  const url=location.href.split('?')[0]+'?join='+myCode;
+  const urlEl=document.getElementById('sm-qr-url');
+  if(urlEl)urlEl.textContent=url;
+  const wrap=document.getElementById('sm-qr-code');
+  if(!wrap)return;
+  wrap.innerHTML='';
+  try{new QRCode(wrap,{text:url,width:140,height:140,colorDark:'#1B3A6B',colorLight:'#FFFFFF',correctLevel:QRCode.CorrectLevel.M});}catch(e){}
+}
+
+function toggleSmQr(){
+  const panel=document.getElementById('sm-qr-panel');
+  if(!panel)return;
+  const open=panel.style.display==='none';
+  panel.style.display=open?'block':'none';
+  const btn=panel.previousElementSibling;
+  if(btn)btn.textContent=open?'✕ Hide QR':'📱 Show Join QR';
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────
+function mkCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return Array.from({length:6},()=>c[Math.floor(Math.random()*c.length)]).join('');}
+function copyBuildUrl(){navigator.clipboard.writeText(document.getElementById('build-url')?.textContent||'').then(()=>toast('Link copied!','ok'));}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));const el=document.getElementById(id);if(el){el.classList.add('active');window.scrollTo(0,0);}}
+function toast(msg,type=''){const c=document.getElementById('toasts');const el=document.createElement('div');el.className='toast '+(type||'');el.textContent=msg;c.appendChild(el);setTimeout(()=>el.remove(),3000);}
+
+// ── INIT ──────────────────────────────────────────────────────────────
+window.addEventListener('load',()=>{
+  const p=new URLSearchParams(location.search);
+  const code=p.get('join');
+  if(code){show('s-join');document.getElementById('j-code').value=code.toUpperCase();document.getElementById('j-name').focus();}
+  updateTimerDisplay();
+});
+</script>
+</body>
+</html>
