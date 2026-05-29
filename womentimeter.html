@@ -1957,3 +1957,14 @@ window.addEventListener('load',()=>{
 </script>
 </body>
 </html>
+
+// ── INIT ──────────────────────────────────────────────────────────────
+window.addEventListener('load',()=>{
+  const p=new URLSearchParams(location.search);
+  const code=p.get('join');
+  if(code){show('s-join');document.getElementById('j-code').value=code.toUpperCase();document.getElementById('j-name').focus();}
+  updateTimerDisplay();
+});
+</script>
+</body>
+</html>
