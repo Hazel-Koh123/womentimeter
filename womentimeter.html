@@ -651,7 +651,7 @@ function initGun(code){
     if(!d||!d.order)return;
     try{pendingActOrder=JSON.parse(d.order);}catch(e){return;}
     reorderActivities();
-    if(myRole==='team'&&phase==='live')routeTeamToActivity(curActIdx);
+    tryRouteTeam();
   });
 
   node.get('acts').map().on((d,k)=>{
@@ -664,7 +664,7 @@ function initGun(code){
     }
     reorderActivities();
     if(myRole==='sm'){renderAgenda();renderProgList();}
-    else if(phase==='live')renderCurrentAct();
+    else{tryRouteTeam();if(phase==='live')renderCurrentAct();}
   });
 
   node.get('participants').map().on((d,k)=>{if(d&&k){st.participants[k]=d;renderParticipants();}});
@@ -745,6 +745,13 @@ function reorderActivities(){
   activities.sort((a,b)=>pendingActOrder.indexOf(a.id)-pendingActOrder.indexOf(b.id));
 }
 
+function tryRouteTeam(){
+  if(myRole!=='team'||phase!=='live')return;
+  if(!pendingActOrder||activities.length<pendingActOrder.length)return;
+  reorderActivities();
+  routeTeamToActivity(curActIdx);
+}
+
 // ── PHASE ─────────────────────────────────────────────────────────────
 function onPhaseChange(p){
   if(p==='live'&&myRole==='team'){
@@ -756,7 +763,7 @@ function onPhaseChange(p){
 function onActivityChange(){
   revealed=false;quizAnswerRevealed=false;myVotesLeft=MAX_VOTES;
   if(myRole==='sm'){updateProgList();renderCurrentAct();updateSMControls();}
-  else routeTeamToActivity(curActIdx);
+  else{tryRouteTeam();if(pendingActOrder&&activities.length>=pendingActOrder.length)routeTeamToActivity(curActIdx);}
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────
@@ -765,7 +772,10 @@ function goCreate(){
   myRole='sm';
   const code=mkCode();
   document.getElementById('build-code').textContent=code;
-  const url=location.href.split('?')[0]+'?join='+code;
+  const isLocal=location.protocol==='file:'||location.hostname==='localhost'||location.hostname==='127.0.0.1';
+  const savedVercel=localStorage.getItem('wom_vercel_url')||'';
+  const baseUrl=isLocal&&savedVercel?savedVercel:location.href.split('?')[0];
+  const url=baseUrl+'?join='+code;
   document.getElementById('build-url').textContent=url;
   // small QR for builder
   document.getElementById('qr-small').innerHTML='';
@@ -1911,23 +1921,42 @@ function updateTimerDisplay(){
 
 // ── SM QR ──────────────────────────────────────────────────────────────
 function initSmQr(){
-  const base=location.href.split('?')[0];
-  const isLocal=location.protocol==='file:';
-  const url=base+'?join='+myCode;
-  const urlEl=document.getElementById('sm-qr-url');
+  const isLocal=location.protocol==='file:'||location.hostname==='localhost'||location.hostname==='127.0.0.1';
   const wrap=document.getElementById('sm-qr-code');
+  const urlEl=document.getElementById('sm-qr-url');
   if(!wrap)return;
   wrap.innerHTML='';
   if(isLocal){
-    wrap.innerHTML=`<div style="padding:10px;background:rgba(255,100,100,.15);border-radius:8px;font-size:.75rem;color:#ffaaaa;text-align:center;">
-      ⚠️ You're opening this file locally.<br>QR scanning won't work until you access the app via your Vercel URL.<br><br>
-      <b style="font-size:1.1rem;letter-spacing:4px;color:#fff;">${myCode}</b><br>
-      <span style="opacity:.7;">Share this code manually</span>
+    const saved=localStorage.getItem('wom_vercel_url')||'';
+    wrap.innerHTML=`<div style="padding:10px;background:rgba(255,100,100,.13);border-radius:8px;font-size:.75rem;color:#ffcccc;text-align:center;min-width:200px;">
+      ⚠️ Running locally — enter your Vercel URL to generate a working QR:<br>
+      <input id="vercel-url-input" type="text" placeholder="https://your-app.vercel.app" value="${saved}"
+        style="margin:8px 0;width:100%;padding:6px 8px;border-radius:6px;border:none;font-size:.75rem;color:#111;box-sizing:border-box;">
+      <button onclick="generateLocalQr()" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:.75rem;">Generate QR</button>
+      <div id="local-qr-out" style="margin-top:8px;"></div>
     </div>`;
-    if(urlEl)urlEl.textContent='Deploy to Vercel for QR scanning';
+    if(urlEl)urlEl.textContent='';
     return;
   }
+  const base=location.href.split('?')[0];
+  const url=base+'?join='+myCode;
   try{new QRCode(wrap,{text:url,width:180,height:180,colorDark:'#1B3A6B',colorLight:'#FFFFFF',correctLevel:QRCode.CorrectLevel.H});}catch(e){}
+  if(urlEl)urlEl.textContent=url;
+}
+
+function generateLocalQr(){
+  const input=document.getElementById('vercel-url-input');
+  if(!input)return;
+  let base=input.value.trim().replace(/\/+$/,'');
+  if(!base){toast('Paste your Vercel URL first','err');return;}
+  if(!base.startsWith('http'))base='https://'+base;
+  localStorage.setItem('wom_vercel_url',base);
+  const url=base+'?join='+myCode;
+  const out=document.getElementById('local-qr-out');
+  const urlEl=document.getElementById('sm-qr-url');
+  if(!out)return;
+  out.innerHTML='';
+  try{new QRCode(out,{text:url,width:180,height:180,colorDark:'#1B3A6B',colorLight:'#FFFFFF',correctLevel:QRCode.CorrectLevel.H});}catch(e){}
   if(urlEl)urlEl.textContent=url;
 }
 
