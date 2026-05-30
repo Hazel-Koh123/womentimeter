@@ -588,10 +588,7 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
 // ── CONFIG ────────────────────────────────────────────────────────────
 const PEERS=[
   'https://gun.eco/gun',
-  'https://etogun.glitch.me/gun',
   'https://peer.wallie.io/gun',
-  'https://gunjs.herokuapp.com/gun',
-  'https://gun-us.glitch.me/gun',
 ];
 const MOODS_EM=['','😫','😕','😐','🙂','🤩'];
 const MAX_VOTES=3;
@@ -730,6 +727,31 @@ function initGun(code){
     st.openAnswers[actId][uid]=d;
     renderCurrentAct();
   });
+
+  // ── POLLING HEARTBEAT ─────────────────────────────────────────────────
+  // Gun's .on() can miss events on flaky relays. Poll every 3s as fallback.
+  setInterval(()=>{
+    if(!node||phase==='build')return;
+    // All roles: keep participant list fresh
+    node.get('participants').map().once((d,k)=>{
+      if(d&&k){st.participants[k]=d;renderParticipants();}
+    });
+    if(phase!=='live')return;
+    if(myRole==='sm'){
+      // Re-render SM dashboard with whatever is in st (votes/moods may have arrived via .on() but not triggered render)
+      renderCurrentAct();
+    } else {
+      // Team: re-check if SM has advanced to a different activity
+      node.get('meta').once(d=>{
+        if(!d)return;
+        if(typeof d.curActIdx==='number'&&d.curActIdx!==curActIdx){
+          curActIdx=d.curActIdx;onActivityChange();
+        } else {
+          tryRouteTeam();
+        }
+      });
+    }
+  },3000);
 }
 
 function setSynced(on){
@@ -1986,11 +2008,12 @@ function toggleSmQr(){
 
 // Utils
 function mkCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return Array.from({length:6},()=>c[Math.floor(Math.random()*c.length)]).join('');}
-function copyBuildUrl(){navigator.clipboard.writeText(document.getElementById('build-url')?.textContent||'').then(()=>toast('Link copied!','ok'));}
+function copyBuildUrl(){navigator.clipboard.writeText(document.getElementId('build-url')?.textContent||'').then(()=>toast('Link copied!','ok'));}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));const el=document.getElementById(id);if(el){el.classList.add('active');window.scrollTo(0,0);}}
 function toast(msg,type=''){const c=document.getElementById('toasts');const el=document.createElement('div');el.className='toast '+(type||'');el.textContent=msg;c.appendChild(el);setTimeout(()=>el.remove(),3000);}
 
+// ── INIT ──────────────────────────────────────────────────────────────
 window.addEventListener('load',()=>{
   const p=new URLSearchParams(location.search);
   const code=p.get('join');
