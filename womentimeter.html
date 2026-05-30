@@ -6,7 +6,6 @@
   <title>(Wo)mentimeter</title>
   <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -367,7 +366,6 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
             <div style="font-size:.68rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.8px;">Session Code</div>
             <div style="font-size:1.3rem;font-weight:800;letter-spacing:5px;color:var(--navy);" id="build-code">——————</div>
           </div>
-          <div id="qr-small" style="flex-shrink:0;"></div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-o btn-sm" onclick="openLoadDraftModal()">📂 Load Draft</button>
@@ -393,7 +391,6 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
 
         <hr class="div" style="margin:16px 0;">
         <p class="section-head">Share with Team</p>
-        <div id="qr-wrap-build" style="display:flex;justify-content:center;padding:8px 0;"></div>
         <div class="url-row" style="margin-top:4px;">
           <span id="build-url"></span>
           <button class="btn btn-g btn-sm" onclick="copyBuildUrl()">📋</button>
@@ -469,15 +466,7 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
             <button class="btn btn-p btn-sm btn-block" onclick="revealAnswer()">🎯 Reveal Answer</button>
           </div>
 
-          <hr class="div-light">
-          <!-- Join QR -->
-          <div>
-            <button class="btn btn-g btn-sm btn-block" style="color:#fff;border:1px solid rgba(255,255,255,.2);margin-bottom:6px;" onclick="toggleSmQr()">📱 Show Join QR</button>
-            <div id="sm-qr-panel" style="display:none;text-align:center;">
-              <div id="sm-qr-code" style="display:inline-block;background:#fff;padding:8px;border-radius:8px;margin-bottom:6px;"></div>
-              <div style="font-size:.75rem;color:rgba(255,255,255,.7);word-break:break-all;" id="sm-qr-url"></div>
-            </div>
-          </div>
+
 
           <hr class="div-light">
           <!-- Participants -->
@@ -729,29 +718,67 @@ function initGun(code){
   });
 
   // ── POLLING HEARTBEAT ─────────────────────────────────────────────────
-  // Gun's .on() can miss events on flaky relays. Poll every 3s as fallback.
+  // Polls Gun every second as a reliable fallback when .on() misses events.
   setInterval(()=>{
-    if(!node||phase==='build')return;
-    // All roles: keep participant list fresh
-    node.get('participants').map().once((d,k)=>{
-      if(d&&k){st.participants[k]=d;renderParticipants();}
-    });
+    if(!node)return;
+    // Refresh participant list for all roles
+    node.get('participants').map().once((d,k)=>{if(d&&k)st.participants[k]=d;});
+    setTimeout(renderParticipants,200);
     if(phase!=='live')return;
-    if(myRole==='sm'){
-      // Re-render SM dashboard with whatever is in st (votes/moods may have arrived via .on() but not triggered render)
-      renderCurrentAct();
-    } else {
-      // Team: re-check if SM has advanced to a different activity
+
+    if(myRole==='team'){
+      // Re-check whether SM has moved to a different question
       node.get('meta').once(d=>{
         if(!d)return;
         if(typeof d.curActIdx==='number'&&d.curActIdx!==curActIdx){
           curActIdx=d.curActIdx;onActivityChange();
-        } else {
-          tryRouteTeam();
-        }
+        } else {tryRouteTeam();}
+        if(d.phase==='done'&&phase!=='done'){phase='done';show('s-results');renderResults();}
       });
+    } else {
+      // SM: re-fetch all response data then re-render dashboard
+      node.get('moods').map().once((d,k)=>{
+        if(!d||!k)return;
+        const[actId,uid]=k.split('__');
+        if(!st.moods[actId])st.moods[actId]={};
+        st.moods[actId][uid]=d;
+      });
+      node.get('pollVotes').map().once((d,k)=>{
+        if(!d||!k)return;
+        const[actId,uid]=k.split('__');
+        if(!st.pollVotes[actId])st.pollVotes[actId]={};
+        st.pollVotes[actId][uid]=d;
+      });
+      node.get('openAnswers').map().once((d,k)=>{
+        if(!d||!k)return;
+        const[actId,uid]=k.split('__');
+        if(!st.openAnswers[actId])st.openAnswers[actId]={};
+        st.openAnswers[actId][uid]=d;
+      });
+      node.get('brainCards').map().once((d,k)=>{
+        if(!d||!k)return;
+        const[actId,...rest]=k.split('__B');
+        const bk='B'+rest.join('__B');
+        if(!st.brainCards[actId])st.brainCards[actId]={};
+        st.brainCards[actId][bk]={...d,_k:bk};
+      });
+      node.get('cards').map().once((d,k)=>{
+        if(!d||!k)return;
+        const[actId,...rest]=k.split('__C');
+        const ck='C'+rest.join('__C');
+        if(!st.cards[actId])st.cards[actId]={};
+        st.cards[actId][ck]={...d,_k:ck};
+      });
+      node.get('pollOther').map().once((d,k)=>{
+        if(!k)return;
+        const[actId,uid]=k.split('__');
+        if(!st.pollOtherText[actId])st.pollOtherText[actId]={};
+        if(d===null)delete st.pollOtherText[actId][uid];
+        else st.pollOtherText[actId][uid]=d;
+      });
+      setTimeout(renderCurrentAct,400);
     }
-  },3000);
+  },1000);
 }
 
 function setSynced(on){
@@ -803,16 +830,8 @@ function goCreate(){
   myRole='sm';
   const code=mkCode();
   document.getElementById('build-code').textContent=code;
-  const isLocal=location.protocol==='file:'||location.hostname==='localhost'||location.hostname==='127.0.0.1';
-  const savedVercel=localStorage.getItem('wom_vercel_url')||'';
-  const baseUrl=isLocal&&savedVercel?savedVercel:location.href.split('?')[0];
-  const url=baseUrl+'?join='+code;
+  const url=location.href.split('?')[0]+'?join='+code;
   document.getElementById('build-url').textContent=url;
-  // small QR for builder
-  document.getElementById('qr-small').innerHTML='';
-  try{new QRCode(document.getElementById('qr-small'),{text:url,width:64,height:64,colorDark:'#1B3A6B',colorLight:'#FFF',correctLevel:QRCode.CorrectLevel.L});}catch(e){}
-  document.getElementById('qr-wrap-build').innerHTML='';
-  try{new QRCode(document.getElementById('qr-wrap-build'),{text:url,width:120,height:120,colorDark:'#1B3A6B',colorLight:'#FFF',correctLevel:QRCode.CorrectLevel.M});}catch(e){}
   show('s-build');
   initGun(code);
   node.get('participants').get(myUid).put({name:myName,role:'sm',joined:Date.now()});
@@ -1077,7 +1096,6 @@ function launchSession(){
   curActIdx=0;
   phase='live';
   show('s-sm');
-  initSmQr();
   updateProgList();
   renderCurrentAct();
   updateSMControls();
@@ -1956,59 +1974,9 @@ function updateTimerDisplay(){
   if(el){el.textContent=`${m}:${s.toString().padStart(2,'0')}`;el.classList.toggle('warn',timerSecs<=60&&timerSecs>0);}
 }
 
-// ── SM QR ──────────────────────────────────────────────────────────────
-function initSmQr(){
-  const isLocal=location.protocol==='file:'||location.hostname==='localhost'||location.hostname==='127.0.0.1';
-  const wrap=document.getElementById('sm-qr-code');
-  const urlEl=document.getElementById('sm-qr-url');
-  if(!wrap)return;
-  wrap.innerHTML='';
-  if(isLocal){
-    const saved=localStorage.getItem('wom_vercel_url')||'';
-    wrap.innerHTML=`<div style="padding:10px;background:rgba(255,100,100,.13);border-radius:8px;font-size:.75rem;color:#ffcccc;text-align:center;min-width:200px;">
-      ⚠️ Running locally — enter your Vercel URL to generate a working QR:<br>
-      <input id="vercel-url-input" type="text" placeholder="https://your-app.vercel.app" value="${saved}"
-        style="margin:8px 0;width:100%;padding:6px 8px;border-radius:6px;border:none;font-size:.75rem;color:#111;box-sizing:border-box;">
-      <button onclick="generateLocalQr()" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:.75rem;">Generate QR</button>
-      <div id="local-qr-out" style="margin-top:8px;"></div>
-    </div>`;
-    if(urlEl)urlEl.textContent='';
-    return;
-  }
-  const base=location.href.split('?')[0];
-  const url=base+'?join='+myCode;
-  try{new QRCode(wrap,{text:url,width:180,height:180,colorDark:'#1B3A6B',colorLight:'#FFFFFF',correctLevel:QRCode.CorrectLevel.H});}catch(e){}
-  if(urlEl)urlEl.textContent=url;
-}
-
-function generateLocalQr(){
-  const input=document.getElementById('vercel-url-input');
-  if(!input)return;
-  let base=input.value.trim().replace(/\/+$/,'');
-  if(!base){toast('Paste your Vercel URL first','err');return;}
-  if(!base.startsWith('http'))base='https://'+base;
-  localStorage.setItem('wom_vercel_url',base);
-  const url=base+'?join='+myCode;
-  const out=document.getElementById('local-qr-out');
-  const urlEl=document.getElementById('sm-qr-url');
-  if(!out)return;
-  out.innerHTML='';
-  try{new QRCode(out,{text:url,width:180,height:180,colorDark:'#1B3A6B',colorLight:'#FFFFFF',correctLevel:QRCode.CorrectLevel.H});}catch(e){}
-  if(urlEl)urlEl.textContent=url;
-}
-
-function toggleSmQr(){
-  const panel=document.getElementById('sm-qr-panel');
-  if(!panel)return;
-  const open=panel.style.display==='none';
-  panel.style.display=open?'block':'none';
-  const btn=panel.previousElementSibling;
-  if(btn)btn.textContent=open?'✕ Hide QR':'📱 Show Join QR';
-}
-
-// Utils
+// ── UTILS ──────────────────────────────────────────────────────────────
 function mkCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return Array.from({length:6},()=>c[Math.floor(Math.random()*c.length)]).join('');}
-function copyBuildUrl(){navigator.clipboard.writeText(document.getElementId('build-url')?.textContent||'').then(()=>toast('Link copied!','ok'));}
+function copyBuildUrl(){navigator.clipboard.writeText(document.getElementById('build-url')?.textContent||'').then(()=>toast('Link copied!','ok'));}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));const el=document.getElementById(id);if(el){el.classList.add('active');window.scrollTo(0,0);}}
 function toast(msg,type=''){const c=document.getElementById('toasts');const el=document.createElement('div');el.className='toast '+(type||'');el.textContent=msg;c.appendChild(el);setTimeout(()=>el.remove(),3000);}
