@@ -463,13 +463,6 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
       <!-- LEFT: sidebar -->
       <div>
         <div class="sm-panel">
-          <!-- Join QR -->
-          <div style="text-align:center;margin-bottom:10px;">
-            <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;opacity:.6;margin-bottom:6px;">Scan to Join</div>
-            <div id="sm-live-qr" style="display:inline-block;background:#fff;padding:8px;border-radius:8px;"></div>
-            <div style="font-size:.7rem;opacity:.5;margin-top:5px;" id="sm-live-code"></div>
-          </div>
-          <hr class="div-light">
           <p class="sm-panel-title">Game Progress</p>
           <div class="prog-bar-wrap"><div class="prog-bar-fill" id="prog-bar" style="width:0%"></div></div>
           <div class="activity-progress" id="prog-list"></div>
@@ -483,7 +476,14 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
           <hr class="div-light">
           <!-- Timer -->
           <div class="timer-num" id="timer-num">5:00</div>
-          <div class="timer-row">
+          <div class="timer-row" style="display:none !important;"></div>
+          <div class="timer-row-fixed">
+            <button class="btn btn-p btn-md btn-block" id="timer-btn" style="margin-top:5px; padding:10px; width:100%;" onclick="toggleTimer()">▶ Start</button>
+          </div>
+          <div style="margin-top:16px; border-top:1px dashed rgba(255,255,255,.15); padding-top:14px; text-align:center;">
+            <p style="font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; opacity:0.6; margin-bottom:8px; color:#fff;">📱 Scan to Join Live</p>
+            <div id="sm-qr-wrap" style="display:inline-flex; justify-content:center; padding:10px; background:#ffffff; border-radius:10px; box-shadow:var(--sh);"></div>
+          </div>
             <button class="btn btn-g btn-sm" style="color:#fff;border:1px solid rgba(255,255,255,.2);" onclick="resetTimer(3)">3m</button>
             <button class="btn btn-g btn-sm" style="color:#fff;border:1px solid rgba(255,255,255,.2);" onclick="resetTimer(5)">5m</button>
             <button class="btn btn-g btn-sm" style="color:#fff;border:1px solid rgba(255,255,255,.2);" onclick="resetTimer(10)">10m</button>
@@ -1242,6 +1242,14 @@ function copyBuildUrl(){
 
 // ── LAUNCH SESSION ─────────────────────────────────────────────────────
 function launchSession(){
+  setTimeout(() => {
+    const smQrBox = document.getElementById('sm-qr-wrap');
+    if(smQrBox) {
+      smQrBox.innerHTML = '';
+      const liveUrl = window.location.origin + window.location.pathname + '?code=' + myCode;
+      new QRCode(smQrBox, { text: liveUrl, width: 130, height: 130, correctLevel: QRCode.CorrectLevel.H });
+    }
+  }, 300);
   if(!activities.length){toast('Add at least one activity','err');return;}
   try{
     activities.forEach(a=>{
@@ -1260,15 +1268,6 @@ function launchSession(){
   renderCurrentAct();
   updateSMControls();
   updateTimerDisplay();
-  // Render join QR in SM panel
-  setTimeout(()=>{
-    const code=document.getElementById('build-code').textContent.trim();
-    const joinUrl=location.href.split('?')[0]+'?join='+code;
-    const qrEl=document.getElementById('sm-live-qr');
-    const codeEl=document.getElementById('sm-live-code');
-    if(qrEl){qrEl.innerHTML='';new QRCode(qrEl,{text:joinUrl,width:110,height:110,correctLevel:QRCode.CorrectLevel.H});}
-    if(codeEl)codeEl.textContent='Code: '+code;
-  },200);
 }
 
 // ── SM LIVE ────────────────────────────────────────────────────────────

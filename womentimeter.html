@@ -463,6 +463,13 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
       <!-- LEFT: sidebar -->
       <div>
         <div class="sm-panel">
+          <!-- Join QR -->
+          <div style="text-align:center;margin-bottom:10px;">
+            <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;opacity:.6;margin-bottom:6px;">Scan to Join</div>
+            <div id="sm-live-qr" style="display:inline-block;background:#fff;padding:8px;border-radius:8px;"></div>
+            <div style="font-size:.7rem;opacity:.5;margin-top:5px;" id="sm-live-code"></div>
+          </div>
+          <hr class="div-light">
           <p class="sm-panel-title">Game Progress</p>
           <div class="prog-bar-wrap"><div class="prog-bar-fill" id="prog-bar" style="width:0%"></div></div>
           <div class="activity-progress" id="prog-list"></div>
@@ -1253,6 +1260,15 @@ function launchSession(){
   renderCurrentAct();
   updateSMControls();
   updateTimerDisplay();
+  // Render join QR in SM panel
+  setTimeout(()=>{
+    const code=document.getElementById('build-code').textContent.trim();
+    const joinUrl=location.href.split('?')[0]+'?join='+code;
+    const qrEl=document.getElementById('sm-live-qr');
+    const codeEl=document.getElementById('sm-live-code');
+    if(qrEl){qrEl.innerHTML='';new QRCode(qrEl,{text:joinUrl,width:110,height:110,correctLevel:QRCode.CorrectLevel.H});}
+    if(codeEl)codeEl.textContent='Code: '+code;
+  },200);
 }
 
 // ── SM LIVE ────────────────────────────────────────────────────────────
