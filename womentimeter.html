@@ -371,7 +371,10 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
 <!-- ═══ GAME BUILDER (SM) ════════════════════════════════════════════ -->
 <div class="screen" id="s-build">
   <nav class="nav">
-    <div class="logo">(Wo)<span>mentimeter</span> <span style="font-size:.75rem;opacity:.6;font-weight:400;margin-left:6px;">Game Builder</span></div>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <button class="btn btn-g" style="color:#fff;font-size:.82rem;" onclick="show('s-home')">← Back</button>
+      <div class="logo">(Wo)<span>mentimeter</span> <span style="font-size:.75rem;opacity:.6;font-weight:400;margin-left:6px;">Game Builder</span></div>
+    </div>
     <div class="nav-r">
       <div class="sync-dot off" id="build-sync"></div>
       <span id="build-sync-lbl" style="font-size:.78rem;">Connecting…</span>
@@ -501,6 +504,7 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
 
           <hr class="div-light">
           <button class="btn btn-g btn-sm btn-block" style="color:#fff;border:1px solid rgba(255,255,255,.2);" onclick="showResults()">🏁 End &amp; Show Results</button>
+          <button class="btn btn-g btn-sm btn-block" style="color:#fff;border:1px solid rgba(255,255,255,.2);margin-top:6px;" onclick="show('s-build')">← Back to Builder</button>
         </div>
       </div>
 
@@ -586,6 +590,7 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
         <p class="sub" id="res-sub"></p>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-o btn-sm" onclick="show('s-build')">← Back to Game</button>
         <button class="btn btn-o btn-sm" onclick="exportMd()">📥 Markdown</button>
         <button class="btn btn-p btn-sm" onclick="exportXlsx()">📊 Export Excel</button>
       </div>
