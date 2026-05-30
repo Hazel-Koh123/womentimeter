@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>(Wo)mentimeter</title>
   <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -575,10 +576,10 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
 <!-- ═══════════════════════ JAVASCRIPT ════════════════════════════════ -->
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────
-const PEERS=[
-  'https://gun.eco/gun',
-  'https://peer.wallie.io/gun',
-];
+const PEERS=['https://gun.eco/gun','https://peer.wallie.io/gun'];
+// PeerJS real-time layer
+let peer=null,smConn=null,playerConns={};
+function peerSmId(code){return 'wom-sm-'+code.toLowerCase();}
 const MOODS_EM=['','😫','😕','😐','🙂','🤩'];
 const MAX_VOTES=3;
 
@@ -784,6 +785,101 @@ function initGun(code){
       setTimeout(renderCurrentAct,400);
     }
   },1000);
+
+  // ── PEERJS REAL-TIME ──────────────────────────────────────────────────
+  initSync(code);
+}
+
+function initSync(code){
+  if(myRole==='sm'){
+    if(peer&&!peer.destroyed)peer.destroy();
+    peer=new Peer(peerSmId(code));
+    peer.on('open',()=>setSynced(true));
+    peer.on('connection',conn=>{
+      conn.on('open',()=>{
+        playerConns[conn.peer]=conn;
+        conn.send({t:'init',activities,st,curActIdx,phase,revealed,quizAnswerRevealed});
+      });
+      conn.on('data',msg=>onPlayerMsg(conn.peer,msg));
+      conn.on('close',()=>delete playerConns[conn.peer]);
+      conn.on('error',e=>console.warn('conn err',e));
+    });
+    peer.on('error',e=>{
+      setSynced(false);
+      if(e.type!=='unavailable-id')setTimeout(()=>initSync(code),4000);
+    });
+  } else {
+    if(peer&&!peer.destroyed)peer.destroy();
+    peer=new Peer();
+    peer.on('open',()=>connectToSm(code));
+    peer.on('error',()=>{setSynced(false);setTimeout(()=>initSync(code),4000);});
+  }
+}
+
+function connectToSm(code){
+  if(smConn&&smConn.open)smConn.close();
+  smConn=peer.connect(peerSmId(code),{reliable:true});
+  smConn.on('open',()=>{setSynced(true);smConn.send({t:'join',uid:myUid,name:myName});});
+  smConn.on('data',msg=>onSmMsg(msg));
+  smConn.on('close',()=>{setSynced(false);setTimeout(()=>connectToSm(code),2500);});
+  smConn.on('error',()=>setTimeout(()=>connectToSm(code),2500));
+}
+
+function broadcast(msg){Object.values(playerConns).forEach(c=>{if(c.open)try{c.send(msg);}catch(e){}});}
+function sendToSm(msg){if(smConn&&smConn.open)try{smConn.send(msg);}catch(e){}}
+
+function onPlayerMsg(peerId,msg){
+  const uid=msg.uid||peerId,{t,actId,data}=msg;
+  if(t==='join'){
+    st.participants[uid]={name:msg.name,role:'team',joined:Date.now()};
+    renderParticipants();
+    broadcast({t:'parts',parts:st.participants});
+    return;
+  }
+  if(t==='mood'){if(!st.moods[actId])st.moods[actId]={};st.moods[actId][uid]=data;}
+  else if(t==='pollVote'){
+    if(!st.pollVotes[actId])st.pollVotes[actId]={};st.pollVotes[actId][uid]=data;
+    if(msg.otherText!=null){if(!st.pollOtherText[actId])st.pollOtherText[actId]={};st.pollOtherText[actId][uid]=msg.otherText;}
+  }
+  else if(t==='card'){if(!st.cards[actId])st.cards[actId]={};st.cards[actId][data._k]=data;}
+  else if(t==='brain'){if(!st.brainCards[actId])st.brainCards[actId]={};st.brainCards[actId][data._k]=data;}
+  else if(t==='openq'){if(!st.openAnswers[actId])st.openAnswers[actId]={};st.openAnswers[actId][uid]=data;}
+  else if(t==='cardVote'){
+    if(!st.votes[actId])st.votes[actId]={};
+    const vk=msg.cardKey+'__'+uid;
+    if(data===null)delete st.votes[actId][vk];else st.votes[actId][vk]=data;
+  }
+  renderCurrentAct();
+  broadcast({t:'relay',payload:msg,fromUid:uid});
+}
+
+function onSmMsg(msg){
+  const {t}=msg;
+  if(t==='init'){
+    if(msg.activities&&msg.activities.length>0){activities=msg.activities;pendingActOrder=activities.map(a=>a.id);}
+    const s=msg.st||{};Object.keys(s).forEach(k=>{if(s[k])Object.assign(st[k]||(st[k]={}),s[k]);});
+    curActIdx=typeof msg.curActIdx==='number'?msg.curActIdx:0;
+    phase=msg.phase||'build';revealed=!!msg.revealed;quizAnswerRevealed=!!msg.quizAnswerRevealed;
+    reorderActivities();
+    if(phase==='live')routeTeamToActivity(curActIdx);
+    else if(phase==='done'){show('s-results');renderResults();}
+    renderParticipants();return;
+  }
+  if(t==='nav'){curActIdx=msg.curActIdx;revealed=!!msg.revealed;quizAnswerRevealed=!!msg.quizRevealed;myVotesLeft=MAX_VOTES;onActivityChange();return;}
+  if(t==='phase'){phase=msg.phase;onPhaseChange(phase);return;}
+  if(t==='reveal'){revealed=msg.revealed;renderCurrentAct();return;}
+  if(t==='quizReveal'){quizAnswerRevealed=msg.v;renderCurrentAct();return;}
+  if(t==='parts'){Object.assign(st.participants,msg.parts);renderParticipants();return;}
+  if(t==='relay'){
+    const pm=msg.payload,uid=msg.fromUid,{actId,data}=pm;
+    if(pm.t==='mood'){if(!st.moods[actId])st.moods[actId]={};st.moods[actId][uid]=data;}
+    else if(pm.t==='pollVote'){if(!st.pollVotes[actId])st.pollVotes[actId]={};st.pollVotes[actId][uid]=data;if(pm.otherText!=null){if(!st.pollOtherText[actId])st.pollOtherText[actId]={};st.pollOtherText[actId][uid]=pm.otherText;}}
+    else if(pm.t==='card'){if(!st.cards[actId])st.cards[actId]={};st.cards[actId][data._k]=data;}
+    else if(pm.t==='brain'){if(!st.brainCards[actId])st.brainCards[actId]={};st.brainCards[actId][data._k]=data;}
+    else if(pm.t==='openq'){if(!st.openAnswers[actId])st.openAnswers[actId]={};st.openAnswers[actId][uid]=data;}
+    else if(pm.t==='cardVote'){if(!st.votes[actId])st.votes[actId]={};const vk=pm.cardKey+'__'+uid;if(data===null)delete st.votes[actId][vk];else st.votes[actId][vk]=data;}
+    renderCurrentAct();
+  }
 }
 
 function setSynced(on){
@@ -839,8 +935,8 @@ function goCreate(){
   document.getElementById('build-url').textContent=url;
   show('s-build');
   initGun(code);
+  st.participants[myUid]={name:myName,role:'sm',joined:Date.now()};
   node.get('participants').get(myUid).put({name:myName,role:'sm',joined:Date.now()});
-  setInterval(()=>{if(node)node.get('participants').get(myUid).put({name:myName,role:'sm',joined:Date.now()});},8000);
   node.get('meta').put({phase:'build',curActIdx:-1,revealed:false,quizRevealed:false});
   updateTimerDisplay();
 }
@@ -862,9 +958,8 @@ function doJoin(){
   show('s-lobby');
   initGun(code);
   // Announce presence immediately, then re-announce every 8s so SM polling catches us
-  function announceMe(){node.get('participants').get(myUid).put({name:myName,role:myRole,joined:Date.now()});}
-  announceMe();
-  setInterval(announceMe,8000);
+  st.participants[myUid]={name:myName,role:'team',joined:Date.now()};
+  node.get('participants').get(myUid).put({name:myName,role:'team',joined:Date.now()});
   // Check if already live
   node.get('meta').once(d=>{
     if(d&&d.phase==='live'){
@@ -1104,6 +1199,7 @@ function launchSession(){
   // Go live
   curActIdx=0;
   phase='live';
+  broadcast({t:'phase',phase:'live'});
   show('s-sm');
   updateProgList();
   renderCurrentAct();
@@ -1147,6 +1243,7 @@ function nextActivity(){
 function jumpToActivity(i){
   curActIdx=i;revealed=false;quizAnswerRevealed=false;myVotesLeft=MAX_VOTES;
   node.get('meta').put({curActIdx:i,revealed:false,quizRevealed:false});
+  broadcast({t:'nav',curActIdx:i,revealed:false,quizRevealed:false});
   updateProgList();renderCurrentAct();updateSMControls();
   const chk=document.getElementById('reveal-chk');if(chk)chk.checked=false;
 }
@@ -1154,6 +1251,7 @@ function jumpToActivity(i){
 function toggleReveal(on){
   revealed=on;
   node.get('meta').put({revealed:on});
+  broadcast({t:'reveal',revealed:on});
   renderCurrentAct();
   toast(on?'Cards revealed!':'Cards hidden','ok');
 }
@@ -1161,12 +1259,14 @@ function toggleReveal(on){
 function revealAnswer(){
   quizAnswerRevealed=true;
   node.get('meta').put({quizRevealed:true});
+  broadcast({t:'quizReveal',v:true});
   renderCurrentAct();
   toast('Answer revealed!','ok');
 }
 
 function showResults(){
   node.get('meta').put({phase:'done'});
+  broadcast({t:'phase',phase:'done'});
   phase='done';
   show('s-results');
   renderResults();
@@ -1257,6 +1357,7 @@ function renderMoodTeam(actId){
 function submitMood(actId,v){
   mySubmitted[actId]=v;
   node.get('moods').get(actId+'__'+myUid).put({value:v,name:myName});
+  sendToSm({t:'mood',uid:myUid,actId,data:{value:v,name:myName}});
   renderActForTeam(activities[curActIdx]);
   toast('Mood submitted!','ok');
 }
@@ -1356,14 +1457,16 @@ function addCard(aId,colId){
   const ta=document.getElementById('ata_'+aId+'_'+colId);
   const txt=ta?.value.trim();if(!txt){toast('Enter some text','err');return;}
   const k='C'+Date.now()+Math.random().toString(36).slice(2,4);
-  node.get('cards').get(aId+'__'+k).put({text:txt,col:colId,authorId:myUid,ts:Date.now()});
+  const cardData={text:txt,col:colId,authorId:myUid,ts:Date.now(),_k:k};
+  node.get('cards').get(aId+'__'+k).put(cardData);
+  sendToSm({t:'card',uid:myUid,actId:aId,data:cardData});
   hideAdd(aId,colId);toast('Card added!','ok');
 }
 function doVote(actId,cardKey){
   const voted=iVoted(actId,cardKey);
-  if(voted){node.get('cardVotes').get(actId+'__V'+cardKey+'__'+myUid).put(null);myVotesLeft=Math.min(MAX_VOTES,myVotesLeft+1);}
+  if(voted){node.get('cardVotes').get(actId+'__V'+cardKey+'__'+myUid).put(null);myVotesLeft=Math.min(MAX_VOTES,myVotesLeft+1);sendToSm({t:'cardVote',uid:myUid,actId,cardKey,data:null});}
   else{if(myVotesLeft<=0){toast('No votes left!','err');return;}
-    node.get('cardVotes').get(actId+'__V'+cardKey+'__'+myUid).put(true);myVotesLeft--;}
+    node.get('cardVotes').get(actId+'__V'+cardKey+'__'+myUid).put(true);myVotesLeft--;sendToSm({t:'cardVote',uid:myUid,actId,cardKey,data:true});}
   const el=document.getElementById('votes-left');if(el)el.textContent=myVotesLeft;
 }
 
@@ -1459,8 +1562,10 @@ function submitMultiVote(actId){
     node.get('pollOther').get(actId+'__'+myUid).put(otherTxt);
   }
   const value=JSON.stringify([...sel]);
+  const otherVal=sel.has('__other__')?document.getElementById('other-inp-'+actId)?.value.trim():null;
   mySubmitted[actId]=value;
   node.get('pollVotes').get(actId+'__'+myUid).put(value);
+  sendToSm({t:'pollVote',uid:myUid,actId,data:value,otherText:otherVal});
   renderActForTeam(activities[curActIdx]);
   toast('Submitted!','ok');
 }
@@ -1478,6 +1583,7 @@ function castVote(actId,optKey,btn){
   }
   mySubmitted[actId]=optKey;
   node.get('pollVotes').get(actId+'__'+myUid).put(optKey);
+  sendToSm({t:'pollVote',uid:myUid,actId,data:optKey});
   renderActForTeam(activities[curActIdx]);
   toast('Vote recorded!','ok');
 }
@@ -1493,6 +1599,7 @@ function submitSingleWithOther(actId){
   }
   mySubmitted[actId]=key;
   node.get('pollVotes').get(actId+'__'+myUid).put(key);
+  sendToSm({t:'pollVote',uid:myUid,actId,data:key,otherText:key==='__other__'?document.getElementById('other-inp-'+actId)?.value.trim():null});
   renderActForTeam(activities[curActIdx]);
   toast('Vote recorded!','ok');
 }
@@ -1552,7 +1659,9 @@ function addBrainCard(actId){
   const el=document.getElementById('brain-inp');
   const txt=el?.value.trim();if(!txt){toast('Enter an idea','err');return;}
   const k='B'+Date.now()+Math.random().toString(36).slice(2,4);
-  node.get('brainCards').get(actId+'__'+k).put({text:txt,authorId:myUid,ts:Date.now()});
+  const brainData={text:txt,authorId:myUid,ts:Date.now(),_k:k};
+  node.get('brainCards').get(actId+'__'+k).put(brainData);
+  sendToSm({t:'brain',uid:myUid,actId,data:brainData});
   el.value='';toast('Idea added!','ok');
 }
 
@@ -1598,6 +1707,7 @@ function submitOpenQ(actId){
   if(!txt){toast('Enter your answer','err');return;}
   mySubmitted[actId]=txt;
   node.get('openAnswers').get(actId+'__'+myUid).put({text:txt,ts:Date.now()});
+  sendToSm({t:'openq',uid:myUid,actId,data:{text:txt,ts:Date.now()}});
   renderActForTeam(activities[curActIdx]);
   toast('Answer submitted!','ok');
 }
