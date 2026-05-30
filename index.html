@@ -1862,7 +1862,7 @@ function downloadGameConfigurationToDisk(){
   const blob = new Blob([template], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = mas_game_save_\.json;
+  a.download = 'mas_game_save.json';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
