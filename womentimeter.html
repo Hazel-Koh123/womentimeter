@@ -721,9 +721,14 @@ function initGun(code){
   // Polls Gun every second as a reliable fallback when .on() misses events.
   setInterval(()=>{
     if(!node)return;
-    // Refresh participant list for all roles
-    node.get('participants').map().once((d,k)=>{if(d&&k)st.participants[k]=d;});
-    setTimeout(renderParticipants,200);
+    // Refresh participant list — read parent node directly (more reliable than map().once())
+    node.get('participants').once(d=>{
+      if(!d)return;
+      Object.keys(d).filter(k=>k!=='_').forEach(uid=>{
+        if(d[uid]&&d[uid].name)st.participants[uid]=d[uid];
+      });
+      renderParticipants();
+    });
     if(phase!=='live')return;
 
     if(myRole==='team'){
@@ -835,6 +840,7 @@ function goCreate(){
   show('s-build');
   initGun(code);
   node.get('participants').get(myUid).put({name:myName,role:'sm',joined:Date.now()});
+  setInterval(()=>{if(node)node.get('participants').get(myUid).put({name:myName,role:'sm',joined:Date.now()});},8000);
   node.get('meta').put({phase:'build',curActIdx:-1,revealed:false,quizRevealed:false});
   updateTimerDisplay();
 }
@@ -855,7 +861,10 @@ function doJoin(){
   document.getElementById('t-code').textContent=code;
   show('s-lobby');
   initGun(code);
-  node.get('participants').get(myUid).put({name:myName,role:'team',joined:Date.now()});
+  // Announce presence immediately, then re-announce every 8s so SM polling catches us
+  function announceMe(){node.get('participants').get(myUid).put({name:myName,role:myRole,joined:Date.now()});}
+  announceMe();
+  setInterval(announceMe,8000);
   // Check if already live
   node.get('meta').once(d=>{
     if(d&&d.phase==='live'){
