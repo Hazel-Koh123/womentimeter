@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -6,7 +6,6 @@
   <title>(Wo)mentimeter</title>
   <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -341,6 +340,29 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
       <button class="btn btn-n btn-lg" onclick="goCreate()">🎮 Create Game</button>
       <button class="btn btn-o btn-lg" onclick="goJoin()">🤓 Join Game</button>
     </div>
+    <div style="margin-top:20px; border-top:1px dashed var(--gray-b); padding-top:15px; text-align:center;">
+      <label class="btn btn-o btn-sm" style="display:inline-flex; cursor:pointer; font-size:0.82rem; background:var(--white);">
+        📂 Load Backup configuration (.json)
+        <input type="file" id="disk-file-loader" accept=".json" style="display:none;" onchange="
+          const file = this.files[0];
+          if(file){
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              try {
+                const data = JSON.parse(e.target.result);
+                if(data.activities && data.activities.length) {
+                  activities = data.activities;
+                  goCreate();
+                  setTimeout(() => { renderAgenda(); updateLaunchBtn(); }, 350);
+                  toast('Game configuration loaded from local file!', 'ok');
+                } else { toast('Malformed configuration template data.', 'err'); }
+              } catch(err) { toast('Error reading target file.', 'err'); }
+            };
+            reader.readAsText(file);
+          }
+        ">
+      </label>
+    </div>
     <p class="home-hint">Real-time sync · No account needed · Works in any browser</p>
   </div>
 </div>
@@ -371,7 +393,7 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-o btn-sm" onclick="openLoadDraftModal()">📂 Load Draft</button>
-          <button class="btn btn-o btn-sm" onclick="openSaveDraftModal()" id="save-draft-btn" disabled>💾 Save Draft</button>
+          <button class="btn btn-o btn-sm" onclick="downloadGameConfigurationToDisk()" id="save-draft-btn" disabled>💾 Save Draft</button>
           <button class="btn btn-p btn-lg" id="launch-btn" onclick="launchSession()" disabled>👑 Launch Session</button>
         </div>
       </div>
@@ -396,14 +418,6 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
         <div class="url-row" style="margin-top:4px;">
           <span id="build-url"></span>
           <button class="btn btn-g btn-sm" onclick="copyBuildUrl()">📋</button>
-        </div>
-        <div id="build-qr-wrap" style="display:flex;justify-content:center;padding:10px 0 4px;"></div>
-        <div id="build-qr-warning" style="display:none;padding:8px;background:#fff3cd;border-radius:7px;font-size:.75rem;color:#856404;text-align:center;">
-          ⚠️ QR works on your Vercel URL only. Enter it below:<br>
-          <input id="vercel-url-inp" type="text" placeholder="https://your-app.vercel.app"
-            style="margin:6px 0 4px;width:100%;padding:5px 8px;border-radius:6px;border:1px solid #ccc;font-size:.75rem;box-sizing:border-box;">
-          <button onclick="buildQrFromInput()" style="background:#1B3A6B;color:#fff;border:none;border-radius:6px;padding:4px 14px;cursor:pointer;font-size:.75rem;">Generate QR</button>
-          <div id="build-qr-inp-out" style="margin-top:8px;display:flex;justify-content:center;"></div>
         </div>
       </div>
 
@@ -477,20 +491,6 @@ hr.div-light{border:none;border-top:1px solid rgba(255,255,255,.12);margin:12px 
           </div>
 
 
-
-          <hr class="div-light">
-          <!-- Join QR -->
-          <p class="sm-panel-title" style="margin-bottom:6px;">📱 Join Link</p>
-          <div id="sm-join-url" style="font-size:.65rem;color:rgba(255,255,255,.6);word-break:break-all;margin-bottom:6px;"></div>
-          <button class="btn btn-g btn-sm btn-block" style="color:#fff;border:1px solid rgba(255,255,255,.2);margin-bottom:6px;" onclick="copySmJoinUrl()">📋 Copy Link</button>
-          <div id="sm-qr-wrap" style="display:flex;justify-content:center;background:#fff;border-radius:8px;padding:8px;margin-bottom:4px;"></div>
-          <div id="sm-qr-warning" style="display:none;padding:6px;background:rgba(255,200,0,.15);border-radius:6px;font-size:.7rem;color:#ffd700;text-align:center;">
-            QR needs your Vercel URL:<br>
-            <input id="sm-vercel-inp" type="text" placeholder="https://your-app.vercel.app"
-              style="margin:4px 0;width:100%;padding:4px 7px;border-radius:5px;border:none;font-size:.7rem;box-sizing:border-box;color:#111;">
-            <button onclick="smQrFromInput()" style="background:var(--coral);color:#fff;border:none;border-radius:5px;padding:3px 12px;cursor:pointer;font-size:.7rem;margin-top:2px;">Generate</button>
-            <div id="sm-qr-inp-out" style="margin-top:6px;display:flex;justify-content:center;"></div>
-          </div>
 
           <hr class="div-light">
           <!-- Participants -->
@@ -650,13 +650,24 @@ function initGun(code){
   gun=Gun({peers:PEERS});
   node=gun.get('womentimeter_v5').get('s_'+code);
   setTimeout(()=>setSynced(true),2500);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && node) {
+    node.get('meta').once(d => {
+      if(d && typeof d.curActIdx === 'number') {
+        curActIdx = d.curActIdx;
+        onActivityChange();
+        if(typeof renderCurrentAct==='function'){renderCurrentAct();}
+      }
+    });
+  }
+});
 
   node.get('meta').on(d=>{
     if(!d)return;
     if(d.phase&&d.phase!==phase){phase=d.phase;onPhaseChange(phase);}
     if(typeof d.revealed==='boolean'&&d.revealed!==revealed){revealed=d.revealed;renderCurrentAct();}
     if(typeof d.quizRevealed==='boolean'&&d.quizRevealed!==quizAnswerRevealed){quizAnswerRevealed=d.quizRevealed;renderCurrentAct();}
-    if(typeof d.curActIdx==='number'&&d.curActIdx!==curActIdx){curActIdx=d.curActIdx;onActivityChange();}
+    if(typeof d.curActIdx==='number'&&d.curActIdx!==curActIdx){curActIdx=d.curActIdx;onActivityChange();setTimeout(() => { if(typeof renderCurrentAct === 'function') renderCurrentAct(); }, 150);}
   });
 
   node.get('activityOrder').on(d=>{
@@ -954,7 +965,8 @@ function goCreate(){
   myRole='sm';
   const code=mkCode();
   document.getElementById('build-code').textContent=code;
-  initBuildQr(code);
+  const url=location.href.split('?')[0]+'?join='+code;
+  document.getElementById('build-url').textContent=url;
   show('s-build');
   initGun(code);
   st.participants[myUid]={name:myName,role:'sm',joined:Date.now()};
@@ -1223,7 +1235,6 @@ function launchSession(){
   phase='live';
   broadcast({t:'phase',phase:'live'});
   show('s-sm');
-  initSmQr(myCode);
   updateProgList();
   renderCurrentAct();
   updateSMControls();
@@ -1823,6 +1834,18 @@ const DRAFTS_KEY='wom_drafts';
 function getDrafts(){try{return JSON.parse(localStorage.getItem(DRAFTS_KEY)||'{}');}catch(e){return{};}}
 function saveDrafts(d){localStorage.setItem(DRAFTS_KEY,JSON.stringify(d));}
 
+function downloadGameConfigurationToDisk(){
+  if(!activities.length) { toast('No activities available to export', 'err'); return; }
+  const template = JSON.stringify({ activities: activities, savedAt: Date.now() }, null, 2);
+  const blob = new Blob([template], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = mas_game_save_\.json;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  toast('Game saved securely to your computer!', 'ok');
+}
 function openSaveDraftModal(){
   const defaultName=`Draft ${new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short'})}`;
   const existing=getDrafts();
@@ -2114,84 +2137,6 @@ function updateTimerDisplay(){
   const m=Math.floor(Math.max(0,timerSecs)/60),s=Math.max(0,timerSecs)%60;
   const el=document.getElementById('timer-num');
   if(el){el.textContent=`${m}:${s.toString().padStart(2,'0')}`;el.classList.toggle('warn',timerSecs<=60&&timerSecs>0);}
-}
-
-
-// ── QR CODE ────────────────────────────────────────────────────────────
-function getJoinUrl(code){
-  const base=location.href.split('?')[0];
-  return base+'?join='+code;
-}
-
-function isLocalFile(){
-  return location.protocol==='file:'||location.hostname==='localhost'||location.hostname==='127.0.0.1';
-}
-
-function makeQr(el,url,size){
-  el.innerHTML='';
-  try{new QRCode(el,{text:url,width:size,height:size,colorDark:'#1B3A6B',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});}catch(e){}
-}
-
-function initBuildQr(code){
-  const url=getJoinUrl(code);
-  document.getElementById('build-url').textContent=url;
-  const wrap=document.getElementById('build-qr-wrap');
-  const warn=document.getElementById('build-qr-warning');
-  if(isLocalFile()){
-    wrap.style.display='none';
-    warn.style.display='block';
-    const saved=localStorage.getItem('wom_vercel_url')||'';
-    if(saved){document.getElementById('vercel-url-inp').value=saved;buildQrFromInput();}
-  } else {
-    wrap.style.display='flex';
-    warn.style.display='none';
-    makeQr(wrap,url,140);
-  }
-}
-
-function buildQrFromInput(){
-  let base=document.getElementById('vercel-url-inp').value.trim().replace(/\/+$/,'');
-  if(!base){toast('Enter your Vercel URL','err');return;}
-  if(!base.startsWith('http'))base='https://'+base;
-  localStorage.setItem('wom_vercel_url',base);
-  const url=base+'?join='+myCode;
-  document.getElementById('build-url').textContent=url;
-  const out=document.getElementById('build-qr-inp-out');
-  makeQr(out,url,120);
-}
-
-function initSmQr(code){
-  const url=getJoinUrl(code);
-  const urlEl=document.getElementById('sm-join-url');
-  const wrap=document.getElementById('sm-qr-wrap');
-  const warn=document.getElementById('sm-qr-warning');
-  if(urlEl)urlEl.textContent=url;
-  if(isLocalFile()){
-    if(wrap)wrap.style.display='none';
-    if(warn)warn.style.display='block';
-    const saved=localStorage.getItem('wom_vercel_url')||'';
-    if(saved){const inp=document.getElementById('sm-vercel-inp');if(inp)inp.value=saved;smQrFromInput();}
-  } else {
-    if(wrap){wrap.style.display='flex';makeQr(wrap,url,160);}
-    if(warn)warn.style.display='none';
-  }
-}
-
-function smQrFromInput(){
-  let base=document.getElementById('sm-vercel-inp')?.value.trim().replace(/\/+$/,'');
-  if(!base){toast('Enter your Vercel URL','err');return;}
-  if(!base.startsWith('http'))base='https://'+base;
-  localStorage.setItem('wom_vercel_url',base);
-  const url=base+'?join='+myCode;
-  const urlEl=document.getElementById('sm-join-url');
-  if(urlEl)urlEl.textContent=url;
-  const out=document.getElementById('sm-qr-inp-out');
-  if(out)makeQr(out,url,140);
-}
-
-function copySmJoinUrl(){
-  const txt=document.getElementById('sm-join-url')?.textContent||getJoinUrl(myCode);
-  navigator.clipboard.writeText(txt).then(()=>toast('Link copied!','ok'));
 }
 
 // ── UTILS ──────────────────────────────────────────────────────────────
